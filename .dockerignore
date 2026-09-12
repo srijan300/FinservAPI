@@ -1,0 +1,14 @@
+.git
+.gitignore
+.dockerignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+cache
+uploads
+frontend/node_modules
+frontend/dist
+.env
+README.md
