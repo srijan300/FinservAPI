@@ -55,6 +55,9 @@ class SubmissionRequest(BaseModel):
     documents: str = Field(..., example="https://hackrx.blob.core.windows.net/assets/policy.pdf?...")
     questions: List[str]
 
+class SubmissionResponse(BaseModel):
+    answers: List[str]
+
 class SuggestionRequest(BaseModel):
     documents: str
 
