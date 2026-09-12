@@ -65,10 +65,12 @@ class RAGPipeline:
             genai.configure(api_key=gemini_api_key)
             self.gemini_model = genai.GenerativeModel("gemini-2.5-flash")
             logger.info("Configured Google Gemini API (gemini-2.5-flash).")
-        elif openai_api_key:
+        
+        if openai_api_key:
             self.openai_client = OpenAI(api_key=openai_api_key)
             logger.info("Configured OpenAI API.")
-        else:
+
+        if not self.gemini_model and not self.openai_client:
             raise ValueError("Either GEMINI_API_KEY or OPENAI_API_KEY is required.")
         
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -306,13 +308,19 @@ Format requirements:
 
             logger.info("Generating dynamic AI questions using LLM based on extracted document content...")
             if self.gemini_model:
-                response = self.gemini_model.generate_content(prompt)
-                lines = [line.strip().lstrip('123456789.-* ') for line in response.text.strip().split('\n') if line.strip() and '?' in line]
-                if len(lines) >= 3:
-                    return lines[:3]
-                elif len(lines) > 0:
-                    return lines
-            elif self.openai_client:
+                try:
+                    response = self.gemini_model.generate_content(prompt)
+                    lines = [line.strip().lstrip('123456789.-* ') for line in response.text.strip().split('\n') if line.strip() and '?' in line]
+                    if len(lines) >= 3:
+                        return lines[:3]
+                    elif len(lines) > 0:
+                        return lines
+                except Exception as gemini_err:
+                    logger.warning(f"Gemini API failed: {gemini_err}. Trying OpenAI fallback if available...")
+                    if not self.openai_client:
+                        raise gemini_err
+            
+            if self.openai_client:
                 response = self.openai_client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role": "user", "content": prompt}],
@@ -328,7 +336,9 @@ Format requirements:
         except Exception as e:
             logger.error(f"Error generating AI suggested questions: {e}")
             err_str = str(e)
-            if "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower():
+            if "API_KEY_INVALID" in err_str or "invalid" in err_str.lower():
+                raise RuntimeError("API key is invalid. Please check your GENAI_KEY in .env file or generate a valid Gemini API key from Google AI Studio (https://aistudio.google.com/).")
+            elif "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower():
                 raise RuntimeError("Google Gemini API Free-Tier Quota Limit Reached (429). Please wait 10-15 seconds before generating questions again.")
             else:
                 short_err = err_str.split('\n')[0] if err_str else "LLM Generation Failed"
@@ -367,9 +377,15 @@ Question:
 Answer:"""
         try:
             if self.gemini_model:
-                response = self.gemini_model.generate_content(prompt)
-                return response.text.strip()
-            elif self.openai_client:
+                try:
+                    response = self.gemini_model.generate_content(prompt)
+                    return response.text.strip()
+                except Exception as gemini_err:
+                    logger.warning(f"Gemini API failed: {gemini_err}. Trying OpenAI fallback if available...")
+                    if not self.openai_client:
+                        raise gemini_err
+
+            if self.openai_client:
                 response = self.openai_client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role": "user", "content": prompt}],
@@ -379,10 +395,12 @@ Answer:"""
         except Exception as e:
             logger.error(f"Error during LLM API call: {e}")
             err_str = str(e)
-            if "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower():
+            if "API_KEY_INVALID" in err_str or "invalid" in err_str.lower():
+                return "⚠️ **Invalid API Key (API_KEY_INVALID)**\n\nThe configured `GENAI_KEY` in `.env` is invalid. Please generate a valid Google Gemini API key from Google AI Studio (https://aistudio.google.com/)."
+            elif "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower():
                 return "⚠️ **Google Gemini API Quota Limit (429)**\n\nThe free tier request limit for Gemini API has been temporarily reached. Please wait 10-15 seconds before running again, or update your API key in the `.env` file."
-            elif "401" in err_str or "403" in err_str or "invalid" in err_str.lower() or "key" in err_str.lower():
-                return "⚠️ **API Authorization Issue (401/403)**\n\nUnable to authenticate with Google Gemini API. Please check that your `GENAI_KEY` in `.env` is valid."
+            elif "401" in err_str or "403" in err_str:
+                return "⚠️ **API Authorization Issue (401/403)**\n\nUnable to authenticate with LLM API. Please check that your API key in `.env` is valid."
             else:
                 short_msg = err_str.split("\n")[0] if err_str else "Service response error"
                 return f"⚠️ **AI Service Notice**\n\nUnable to generate response right now: {short_msg[:120]}. Please try again shortly."
