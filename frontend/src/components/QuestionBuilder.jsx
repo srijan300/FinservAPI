@@ -8,6 +8,7 @@ export default function QuestionBuilder({
   onRunPipeline,
   onSuggestQuestions,
   isProcessing,
+  isSuggesting,
   currentStep
 }) {
   const [showPresets, setShowPresets] = useState(false);
@@ -70,12 +71,22 @@ export default function QuestionBuilder({
           <div className="relative">
             <button
               type="button"
+              disabled={isSuggesting}
               onClick={() => setShowPresets(!showPresets)}
-              className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center space-x-1.5 transition-all shadow-sm cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center space-x-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-50"
             >
-              <Wand2 className="w-3.5 h-3.5" />
-              <span>Suggest Questions</span>
-              <ChevronDown className="w-3 h-3 ml-0.5" />
+              {isSuggesting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
+                  <span>AI Generating Questions...</span>
+                </>
+              ) : (
+                <>
+                  <Wand2 className="w-3.5 h-3.5" />
+                  <span>Suggest Questions</span>
+                  <ChevronDown className="w-3 h-3 ml-0.5" />
+                </>
+              )}
             </button>
 
             {showPresets && (

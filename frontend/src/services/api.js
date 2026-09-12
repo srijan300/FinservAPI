@@ -25,6 +25,26 @@ export async function runSubmissionAPI({ endpoint, token, documentUrl, questions
 }
 
 /**
+ * Fetch dynamic AI-generated questions from backend Gemini LLM based on extracted document text.
+ */
+export async function suggestQuestionsAPI(documentUrl) {
+  const response = await fetch('http://localhost:8000/api/v1/suggest-questions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ documents: documentUrl })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.detail || 'Failed to generate AI questions');
+  }
+
+  return data.questions;
+}
+
+/**
  * Upload a document file (PDF, DOCX, EML) to backend for live parsing.
  */
 export async function uploadDocumentFileAPI(rawFile) {

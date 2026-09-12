@@ -280,6 +280,59 @@ class RAGPipeline:
         self.is_ready = True
         logger.info("--- Document processing complete. Pipeline is ready. ---")
 
+    def generate_ai_suggested_questions(self, doc_url: str) -> list[str]:
+        """
+        Extracts document text from doc_url and uses Gemini LLM to dynamically generate
+        3 highly relevant, document-specific questions based on the actual document contents.
+        """
+        try:
+            if not self.chunks or not self.is_ready:
+                self.process_document(doc_url)
+            
+            sample_text = "\n\n".join(self.chunks[:6]) if self.chunks else ""
+            if not sample_text:
+                sample_text = self._download_and_extract_text(doc_url)[:2000]
+
+            prompt = f"""You are an expert document analyst. Read the following excerpt from a document and generate 3 clear, highly relevant, specific evaluation questions that an auditor or executive would ask about this specific document.
+
+Document Excerpt:
+{sample_text[:2500]}
+
+Format requirements:
+- Return EXACTLY 3 questions.
+- Each question must be on a new line.
+- Do NOT include numbers, bullet points, asterisks, or extra intro text.
+- Each question must be a complete sentence ending with a question mark."""
+
+            logger.info("Generating dynamic AI questions using LLM based on extracted document content...")
+            if self.gemini_model:
+                response = self.gemini_model.generate_content(prompt)
+                lines = [line.strip().lstrip('123456789.-* ') for line in response.text.strip().split('\n') if line.strip() and '?' in line]
+                if len(lines) >= 3:
+                    return lines[:3]
+                elif len(lines) > 0:
+                    return lines
+            elif self.openai_client:
+                response = self.openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.3,
+                )
+                lines = [line.strip().lstrip('123456789.-* ') for line in response.choices[0].message.content.strip().split('\n') if line.strip() and '?' in line]
+                if len(lines) >= 3:
+                    return lines[:3]
+                elif len(lines) > 0:
+                    return lines
+        except Exception as e:
+            logger.error(f"Error generating AI suggested questions: {e}")
+        
+        # Smart context fallback if LLM quota is reached
+        return [
+            "What is the primary subject matter and executive summary of this document?",
+            "What are the key statistical metrics, data points, or tables included?",
+            "What actionable recommendations or critical conclusions are highlighted?"
+        ]
+
     def _retrieve_chunks(self, query: str) -> list[str]:
         if not self.is_ready:
             raise RuntimeError("Pipeline not ready.")

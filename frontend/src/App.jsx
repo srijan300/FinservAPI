@@ -8,7 +8,7 @@ import ResultsPanel from './components/ResultsPanel';
 import Footer from './components/Footer';
 
 import { generateSemanticQuestionsForDocument } from './constants/mockData';
-import { runSubmissionAPI, uploadDocumentFileAPI, generateDemoSimulationAnswers } from './services/api';
+import { runSubmissionAPI, uploadDocumentFileAPI, suggestQuestionsAPI, generateDemoSimulationAnswers } from './services/api';
 
 export default function App() {
   // Theme state
@@ -31,6 +31,7 @@ export default function App() {
   
   // Execution & Pipeline State
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSuggesting, setIsSuggesting] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   
   // Results State
@@ -47,11 +48,40 @@ export default function App() {
     }
   }, [theme]);
 
-  // Handler to auto-generate semantic questions for uploaded/connected file
-  const handleSuggestQuestions = (fileInfo = null) => {
-    const targetName = fileInfo?.name || selectedFile?.name || documentUrl || '';
-    const suggested = generateSemanticQuestionsForDocument(targetName);
-    setQuestions(suggested);
+  // Handler to auto-generate LIVE AI questions by sending document text to Gemini LLM
+  const handleSuggestQuestions = async () => {
+    let targetDocUrl = documentUrl ? documentUrl.trim() : '';
+
+    if (inputTab === 'upload' && selectedFile?.rawFile) {
+      try {
+        setIsSuggesting(true);
+        const uploadRes = await uploadDocumentFileAPI(selectedFile.rawFile);
+        targetDocUrl = uploadRes.file_path || uploadRes.url;
+      } catch (err) {
+        console.error("File upload error during suggestion:", err);
+      }
+    }
+
+    if (!targetDocUrl) {
+      // Fallback if no document loaded yet
+      setQuestions(generateSemanticQuestionsForDocument(selectedFile?.name || documentUrl));
+      return;
+    }
+
+    try {
+      setIsSuggesting(true);
+      const aiQuestions = await suggestQuestionsAPI(targetDocUrl);
+      if (aiQuestions && aiQuestions.length > 0) {
+        setQuestions(aiQuestions);
+      } else {
+        setQuestions(generateSemanticQuestionsForDocument(selectedFile?.name || documentUrl));
+      }
+    } catch (err) {
+      console.warn("Falling back to semantic question generator:", err);
+      setQuestions(generateSemanticQuestionsForDocument(selectedFile?.name || documentUrl));
+    } finally {
+      setIsSuggesting(false);
+    }
   };
 
   // Run RAG Pipeline Execution
@@ -174,6 +204,7 @@ export default function App() {
               onRunPipeline={handleRunPipeline}
               onSuggestQuestions={() => handleSuggestQuestions()}
               isProcessing={isProcessing}
+              isSuggesting={isSuggesting}
               currentStep={currentStep}
             />
           </div>

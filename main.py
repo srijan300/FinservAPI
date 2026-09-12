@@ -55,8 +55,11 @@ class SubmissionRequest(BaseModel):
     documents: str = Field(..., example="https://hackrx.blob.core.windows.net/assets/policy.pdf?...")
     questions: List[str]
 
-class SubmissionResponse(BaseModel):
-    answers: List[str]
+class SuggestionRequest(BaseModel):
+    documents: str
+
+class SuggestionResponse(BaseModel):
+    questions: List[str]
 
 # --- Security Dependency ---
 security_scheme = HTTPBearer()
@@ -85,6 +88,25 @@ async def upload_document(file: UploadFile = File(...)):
         content = await file.read()
         f.write(content)
     return {"filename": file.filename, "file_path": file_path, "url": f"http://localhost:8000/uploads/{file.filename}"}
+
+@api_router.post("/suggest-questions", response_model=SuggestionResponse, summary="Generate AI-based questions from document text")
+async def suggest_questions(request_data: SuggestionRequest):
+    if "rag_pipeline" not in ml_models:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="RAG Pipeline not initialized."
+        )
+    pipeline: RAGPipeline = ml_models["rag_pipeline"]
+    try:
+        qs = pipeline.generate_ai_suggested_questions(request_data.documents)
+        return SuggestionResponse(questions=qs)
+    except Exception as e:
+        print(f"Error generating AI questions: {e}")
+        return SuggestionResponse(questions=[
+            "What is the primary subject matter and executive summary of this document?",
+            "What are the key statistical metrics, data points, or tables included?",
+            "What actionable recommendations or critical conclusions are highlighted?"
+        ])
 
 @api_router.post(
     "/hackrx/run",
