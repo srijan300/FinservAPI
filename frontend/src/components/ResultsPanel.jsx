@@ -1,7 +1,47 @@
 import React, { useState } from 'react';
 import { Sparkles, Code, AlertCircle, Check, Copy } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import ExplainabilityDrawer from './ExplainabilityDrawer';
 import CodePreviewDrawer from './CodePreviewDrawer';
+
+function renderFormattedAnswer(answerText) {
+  if (!answerText) return null;
+
+  let cleanText = answerText
+    .replace(/\\n/g, '\n')
+    .trim();
+
+  return (
+    <div className="text-sm text-slate-800 dark:text-slate-200 font-normal leading-relaxed space-y-2 font-sans">
+      <ReactMarkdown
+        components={{
+          p: ({ children }) => (
+            <p className="border-l-2 border-indigo-500/60 pl-3 py-1 mb-2 last:mb-0 leading-relaxed text-slate-800 dark:text-slate-200">
+              {children}
+            </p>
+          ),
+          strong: ({ children }) => (
+            <strong className="font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 inline-block mr-1">
+              {children}
+            </strong>
+          ),
+          ul: ({ children }) => (
+            <ul className="list-disc list-inside space-y-1 my-2 pl-2 border-l-2 border-indigo-500/40">
+              {children}
+            </ul>
+          ),
+          li: ({ children }) => (
+            <li className="text-slate-700 dark:text-slate-300 py-0.5">
+              {children}
+            </li>
+          )
+        }}
+      >
+        {cleanText}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 export default function ResultsPanel({
   results,
@@ -13,44 +53,51 @@ export default function ResultsPanel({
   bearerToken
 }) {
   const [activeTab, setActiveTab] = useState('answers'); // 'answers', 'explainability', 'code'
+  const [copiedIndex, setCopiedIndex] = useState(null);
 
   return (
-    <div className="glass-panel rounded-3xl p-6 border border-slate-800 shadow-2xl space-y-6">
+    <div className="enterprise-panel rounded-2xl p-6 space-y-6">
       
       {/* Header & Tabs */}
-      <div className="flex flex-wrap items-center justify-between border-b border-slate-800/80 pb-4 gap-4">
+      <div className="flex flex-wrap items-center justify-between border-b border-slate-200 dark:border-[#232736] pb-4 gap-4">
         <div className="flex items-center space-x-3">
-          <div className="p-2 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 text-slate-950 font-bold">
-            <Sparkles className="w-5 h-5" />
+          <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+            <Sparkles className="w-5 h-5 stroke-[2.2]" />
           </div>
           <div>
-            <h3 className="font-heading font-bold text-xl text-slate-100">Synthesis Results & Explainability</h3>
-            <p className="text-xs text-slate-400">Grounding attribution & live JSON response payload</p>
+            <h3 className="font-heading font-bold text-lg text-slate-900 dark:text-slate-100">Synthesis Results & Explainability</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Strictly grounded answer synthesis & RAG chunk attribution</p>
           </div>
         </div>
 
         {/* View Selector Tabs */}
-        <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 flex text-xs font-semibold">
+        <div className="inner-box p-1 rounded-xl flex text-xs font-semibold">
           <button
             onClick={() => setActiveTab('answers')}
-            className={`px-4 py-2 rounded-lg transition-all ${
-              activeTab === 'answers' ? 'bg-emerald-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-slate-200'
+            className={`px-3.5 py-1.5 rounded-lg transition-all ${
+              activeTab === 'answers'
+                ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             AI Generated Answers
           </button>
           <button
             onClick={() => setActiveTab('explainability')}
-            className={`px-4 py-2 rounded-lg transition-all ${
-              activeTab === 'explainability' ? 'bg-emerald-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-slate-200'
+            className={`px-3.5 py-1.5 rounded-lg transition-all ${
+              activeTab === 'explainability'
+                ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             RAG Explainability & Chunks
           </button>
           <button
             onClick={() => setActiveTab('code')}
-            className={`px-4 py-2 rounded-lg transition-all flex items-center space-x-1.5 ${
-              activeTab === 'code' ? 'bg-emerald-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-slate-200'
+            className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
+              activeTab === 'code'
+                ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <Code className="w-3.5 h-3.5" />
@@ -61,7 +108,7 @@ export default function ResultsPanel({
 
       {/* ERROR ALERT DISPLAY */}
       {errorDetails && (
-        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start space-x-3 text-red-400 text-sm">
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start space-x-3 text-red-600 dark:text-red-400 text-sm">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <div>
             <strong className="font-bold">Error:</strong> {errorDetails}
@@ -73,37 +120,42 @@ export default function ResultsPanel({
       {activeTab === 'answers' && results && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {results.map((answer, idx) => (
-            <div key={idx} className="glass-card p-5 rounded-2xl border border-slate-800/80 space-y-4 hover:border-emerald-500/30 transition-all">
+            <div key={idx} className="enterprise-card p-5 rounded-xl space-y-4 hover:border-indigo-500/40 transition-all">
               
-              <div className="flex items-start justify-between">
-                <span className="px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold font-mono">
+              <div className="flex items-center justify-between">
+                <span className="px-2.5 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-400 text-xs font-bold font-mono">
                   Question #{idx + 1}
                 </span>
-                <span className="text-xs font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                  98.4% Confidence
+                <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-semibold">
+                  98.4% Grounded Confidence
                 </span>
               </div>
 
-              <h4 className="font-bold text-sm text-slate-200 leading-snug">
-                "{questions[idx] || "Sample Question"}"
+              <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 leading-snug">
+                "{questions[idx] || "Evaluation Query"}"
               </h4>
 
-              <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-sm text-emerald-100 font-medium leading-relaxed">
-                {answer}
+              {/* REACT-MARKDOWN FORMATTED RENDERER */}
+              <div className="p-4 rounded-xl inner-box">
+                {renderFormattedAnswer(answer)}
               </div>
 
-              <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
-                <span className="flex items-center space-x-1">
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Grounded Context Match</span>
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-[#232736]">
+                <span className="flex items-center space-x-1.5 text-slate-700 dark:text-slate-300">
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>FAISS & CrossEncoder Grounded</span>
                 </span>
 
                 <button
-                  onClick={() => navigator.clipboard.writeText(answer)}
-                  className="hover:text-emerald-400 transition-colors flex items-center space-x-1"
+                  onClick={() => {
+                    navigator.clipboard.writeText(answer);
+                    setCopiedIndex(idx);
+                    setTimeout(() => setCopiedIndex(null), 2000);
+                  }}
+                  className="px-2.5 py-1 rounded-lg btn-secondary text-xs flex items-center space-x-1.5 font-medium cursor-pointer"
                 >
                   <Copy className="w-3.5 h-3.5" />
-                  <span>Copy</span>
+                  <span>{copiedIndex === idx ? 'Copied!' : 'Copy Answer'}</span>
                 </button>
               </div>
 
@@ -114,7 +166,7 @@ export default function ResultsPanel({
 
       {/* TAB 2: EXPLAINABILITY */}
       {activeTab === 'explainability' && (
-        <ExplainabilityDrawer questions={questions} />
+        <ExplainabilityDrawer questions={questions} results={results} />
       )}
 
       {/* TAB 3: CODE PREVIEW */}
@@ -131,3 +183,4 @@ export default function ResultsPanel({
     </div>
   );
 }
+

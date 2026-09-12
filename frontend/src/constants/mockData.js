@@ -69,9 +69,45 @@ export const RAG_STAGES = [
   {
     id: 5,
     name: "Synthesis & Generation",
-    tech: "Google Gemini 2.5 Flash",
+    tech: "Grounded LLM Synthesis",
     desc: "Strictly grounded answer synthesis using top reranked context passages",
     icon: Sparkles,
     latency: "195ms"
   }
 ];
+
+export function generateSemanticQuestionsForDocument(fileName = '') {
+  const nameLower = fileName ? fileName.toLowerCase() : '';
+  
+  if (nameLower.includes('resume') || nameLower.includes('cv') || nameLower.includes('profile')) {
+    return [
+      "What are the core technical skills and tools highlighted in this profile?",
+      "What is the total years of professional experience and key achievements?",
+      "What are potential areas of improvement or weak points in this resume?"
+    ];
+  } else if (nameLower.includes('policy') || nameLower.includes('insurance') || nameLower.includes('claim') || nameLower.includes('health')) {
+    return [
+      "What is the maximum coverage limit and benefit allowance specified in this policy?",
+      "What are the pre-existing conditions and exclusion waiting periods?",
+      "What is the required procedure and documentation for filing a claim?"
+    ];
+  } else if (nameLower.includes('finance') || nameLower.includes('report') || nameLower.includes('tax') || nameLower.includes('invoice') || nameLower.includes('q3')) {
+    return [
+      "What is the total net revenue and profit margin reported in this statement?",
+      "What are the primary expense categories and key financial risk factors?",
+      "What is the forecasted growth rate or outlook mentioned for upcoming quarters?"
+    ];
+  } else if (nameLower.includes('contract') || nameLower.includes('agreement') || nameLower.includes('legal') || nameLower.includes('terms')) {
+    return [
+      "What are the termination conditions and notice period requirements in this contract?",
+      "What are the payment terms, liability caps, and confidentiality obligations?",
+      "Which jurisdiction or governing law applies to dispute resolutions?"
+    ];
+  } else {
+    return [
+      "What is the primary subject matter and executive summary of this document?",
+      "What are the key statistical metrics, data points, or tables included?",
+      "What actionable recommendations or critical conclusions are highlighted?"
+    ];
+  }
+}

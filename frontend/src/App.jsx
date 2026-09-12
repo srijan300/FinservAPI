@@ -7,7 +7,7 @@ import PipelineVisualizer from './components/PipelineVisualizer';
 import ResultsPanel from './components/ResultsPanel';
 import Footer from './components/Footer';
 
-import { SAMPLE_DOCUMENTS } from './constants/mockData';
+import { generateSemanticQuestionsForDocument } from './constants/mockData';
 import { runSubmissionAPI, uploadDocumentFileAPI, generateDemoSimulationAnswers } from './services/api';
 
 export default function App() {
@@ -26,7 +26,7 @@ export default function App() {
   const [documentUrl, setDocumentUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   
-  // Questions State (Default to empty question prompt)
+  // Questions State
   const [questions, setQuestions] = useState(['']);
   
   // Execution & Pipeline State
@@ -47,11 +47,11 @@ export default function App() {
     }
   }, [theme]);
 
-  // Load Sample Preset
-  const handleLoadSample = (sample) => {
-    setDocumentUrl(sample.url);
-    setQuestions([...sample.questions]);
-    setSelectedFile(null);
+  // Handler to auto-generate semantic questions for uploaded/connected file
+  const handleSuggestQuestions = (fileInfo = null) => {
+    const targetName = fileInfo?.name || selectedFile?.name || documentUrl || '';
+    const suggested = generateSemanticQuestionsForDocument(targetName);
+    setQuestions(suggested);
   };
 
   // Run RAG Pipeline Execution
@@ -140,33 +140,25 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} transition-colors duration-200`}>
+    <div className={`min-h-screen ${theme === 'dark' ? 'bg-[#090A0F] text-slate-100' : 'bg-slate-50 text-slate-900'} transition-colors duration-200`}>
       
-      {/* Background Glow Overlay */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden opacity-30">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/3 -right-40 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl"></div>
-      </div>
-
-      {/* 1. Header Navigation */}
+      {/* 1. Executive Navigation Bar */}
       <Header
         theme={theme}
         setTheme={setTheme}
-        executionMode={executionMode}
-        setExecutionMode={setExecutionMode}
       />
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         
-        {/* 2. Hero Section */}
+        {/* 2. Hero Header */}
         <HeroSection />
 
-        {/* Workspace 2-Column Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* 3. Structured Grid Workspace */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          {/* Left Column: Inputs & Questions (7 cols) */}
-          <div className="lg:col-span-7 space-y-6">
+          {/* Main Inputs & Questions (Span 12 cols when idle, 7 cols when active) */}
+          <div className={isProcessing || currentStep > 0 ? "lg:col-span-7 space-y-6" : "lg:col-span-12 space-y-6"}>
             <DocumentInput
               inputTab={inputTab}
               setInputTab={setInputTab}
@@ -174,49 +166,48 @@ export default function App() {
               setDocumentUrl={setDocumentUrl}
               selectedFile={selectedFile}
               setSelectedFile={setSelectedFile}
-              onLoadSample={handleLoadSample}
             />
 
             <QuestionBuilder
               questions={questions}
               setQuestions={setQuestions}
               onRunPipeline={handleRunPipeline}
+              onSuggestQuestions={() => handleSuggestQuestions()}
               isProcessing={isProcessing}
               currentStep={currentStep}
             />
           </div>
 
-          {/* Right Column: Workflow Stepper Visualizer (5 cols) */}
-          <div className="lg:col-span-5 space-y-6">
-            <PipelineVisualizer
-              isProcessing={isProcessing}
-              currentStep={currentStep}
-              executionMode={executionMode}
-              apiEndpoint={apiEndpoint}
-              setApiEndpoint={setApiEndpoint}
-              bearerToken={bearerToken}
-              setBearerToken={setBearerToken}
-            />
-          </div>
+          {/* Live RAG Execution Stepper (Appears on right side when user clicks Run Pipeline) */}
+          {(isProcessing || currentStep > 0) && (
+            <div className="lg:col-span-5 space-y-6 transition-all duration-300">
+              <PipelineVisualizer
+                isProcessing={isProcessing}
+                currentStep={currentStep}
+              />
+            </div>
+          )}
 
         </div>
 
-        {/* 3. Output Results & Explainability Panel */}
-        {(results || errorDetails || isProcessing) && (
-          <ResultsPanel
-            results={results}
-            questions={questions}
-            rawResponse={rawResponse}
-            errorDetails={errorDetails}
-            documentUrl={documentUrl}
-            apiEndpoint={apiEndpoint}
-            bearerToken={bearerToken}
-          />
+        {/* 4. Output Results & Explainability Panel (Appears upon pipeline completion or error) */}
+        {(results || errorDetails) && (
+          <div className="pt-4">
+            <ResultsPanel
+              results={results}
+              questions={questions}
+              rawResponse={rawResponse}
+              errorDetails={errorDetails}
+              documentUrl={documentUrl}
+              apiEndpoint={apiEndpoint}
+              bearerToken={bearerToken}
+            />
+          </div>
         )}
 
       </main>
 
-      {/* 4. Footer */}
+      {/* 5. Minimal Footer */}
       <Footer />
 
     </div>
