@@ -324,7 +324,14 @@ Answer:"""
                 return response.choices[0].message.content.strip()
         except Exception as e:
             logger.error(f"Error during LLM API call: {e}")
-            return f"Error: Could not generate an answer: {e}"
+            err_str = str(e)
+            if "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower():
+                return "⚠️ **Google Gemini API Quota Limit (429)**\n\nThe free tier request limit for Gemini API has been temporarily reached. Please wait 10-15 seconds before running again, or update your API key in the `.env` file."
+            elif "401" in err_str or "403" in err_str or "invalid" in err_str.lower() or "key" in err_str.lower():
+                return "⚠️ **API Authorization Issue (401/403)**\n\nUnable to authenticate with Google Gemini API. Please check that your `GENAI_KEY` in `.env` is valid."
+            else:
+                short_msg = err_str.split("\n")[0] if err_str else "Service response error"
+                return f"⚠️ **AI Service Notice**\n\nUnable to generate response right now: {short_msg[:120]}. Please try again shortly."
 
     def _process_single_question(self, question: str) -> str:
         """Helper function to process one question for parallel execution."""

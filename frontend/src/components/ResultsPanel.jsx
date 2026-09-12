@@ -11,6 +11,25 @@ function renderFormattedAnswer(answerText) {
     .replace(/\\n/g, '\n')
     .trim();
 
+  // Non-coder friendly error message interceptor for LLM rate limits / quota issues
+  if (
+    cleanText.includes('429 You exceeded your current quota') ||
+    cleanText.includes('quota_metric') ||
+    cleanText.includes('Quota exceeded')
+  ) {
+    return (
+      <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 space-y-2 text-xs font-sans">
+        <div className="flex items-center space-x-2 font-bold text-sm text-amber-700 dark:text-amber-400">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>Google Gemini API Limit Reached (429)</span>
+        </div>
+        <p className="leading-relaxed">
+          The free-tier request quota for Google Gemini API has been temporarily reached. Please wait 10-15 seconds before retrying, or update your API key in the <code className="bg-amber-500/20 px-1 py-0.5 rounded font-mono text-[11px]">.env</code> file.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="text-sm text-slate-800 dark:text-slate-200 font-normal leading-relaxed space-y-2 font-sans">
       <ReactMarkdown

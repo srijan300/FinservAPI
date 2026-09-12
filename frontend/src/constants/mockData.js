@@ -76,38 +76,50 @@ export const RAG_STAGES = [
   }
 ];
 
+export const QUESTION_PRESETS = {
+  policy: [
+    "What is the maximum coverage limit and benefit allowance specified in this policy?",
+    "What are the pre-existing conditions, waiting periods, and deductible exclusions?",
+    "What is the exact procedure, required documentation, and deadline for filing a claim?"
+  ],
+  resume: [
+    "What are the core technical skills, programming languages, and frameworks highlighted in this profile?",
+    "What is the candidate's professional experience background, key project contributions, and achievements?",
+    "What are potential areas of improvement, skill gaps, or weak points in this resume?"
+  ],
+  finance: [
+    "What is the total net revenue, gross profit margin, and EBITDA reported in this statement?",
+    "What are the primary operational expense categories and key financial risk factors?",
+    "What is the forecasted revenue growth rate or guidance outlook for upcoming quarters?"
+  ],
+  contract: [
+    "What are the termination conditions, cure periods, and notice period requirements in this contract?",
+    "What are the payment schedules, liability caps, indemnification terms, and confidentiality obligations?",
+    "Which jurisdiction or governing law applies to dispute resolution and arbitration?"
+  ],
+  general: [
+    "What is the primary subject matter, key findings, and executive summary of this document?",
+    "What are the key statistical metrics, performance benchmarks, or data tables included?",
+    "What actionable recommendations, compliance requirements, or conclusions are highlighted?"
+  ]
+};
+
 export function generateSemanticQuestionsForDocument(fileName = '') {
   const nameLower = fileName ? fileName.toLowerCase() : '';
   
-  if (nameLower.includes('resume') || nameLower.includes('cv') || nameLower.includes('profile')) {
-    return [
-      "What are the core technical skills and tools highlighted in this profile?",
-      "What is the total years of professional experience and key achievements?",
-      "What are potential areas of improvement or weak points in this resume?"
-    ];
-  } else if (nameLower.includes('policy') || nameLower.includes('insurance') || nameLower.includes('claim') || nameLower.includes('health')) {
-    return [
-      "What is the maximum coverage limit and benefit allowance specified in this policy?",
-      "What are the pre-existing conditions and exclusion waiting periods?",
-      "What is the required procedure and documentation for filing a claim?"
-    ];
-  } else if (nameLower.includes('finance') || nameLower.includes('report') || nameLower.includes('tax') || nameLower.includes('invoice') || nameLower.includes('q3')) {
-    return [
-      "What is the total net revenue and profit margin reported in this statement?",
-      "What are the primary expense categories and key financial risk factors?",
-      "What is the forecasted growth rate or outlook mentioned for upcoming quarters?"
-    ];
-  } else if (nameLower.includes('contract') || nameLower.includes('agreement') || nameLower.includes('legal') || nameLower.includes('terms')) {
-    return [
-      "What are the termination conditions and notice period requirements in this contract?",
-      "What are the payment terms, liability caps, and confidentiality obligations?",
-      "Which jurisdiction or governing law applies to dispute resolutions?"
-    ];
+  if (nameLower.includes('resume') || nameLower.includes('cv') || nameLower.includes('profile') || nameLower.includes('bio')) {
+    return QUESTION_PRESETS.resume;
+  } else if (nameLower.includes('policy') || nameLower.includes('insurance') || nameLower.includes('claim') || nameLower.includes('health') || nameLower.includes('coverage')) {
+    return QUESTION_PRESETS.policy;
+  } else if (nameLower.includes('finance') || nameLower.includes('report') || nameLower.includes('tax') || nameLower.includes('invoice') || nameLower.includes('q3') || nameLower.includes('earning')) {
+    return QUESTION_PRESETS.finance;
+  } else if (nameLower.includes('contract') || nameLower.includes('agreement') || nameLower.includes('legal') || nameLower.includes('terms') || nameLower.includes('nda')) {
+    return QUESTION_PRESETS.contract;
+  } else if (nameLower.includes('drive.google.com') || nameLower.includes('1w_4') || nameLower.includes('hackrx') || nameLower.includes('pdf')) {
+    // Smart heuristic for Drive & HackRX links (defaulting to policy/financial QA standard)
+    return QUESTION_PRESETS.policy;
   } else {
-    return [
-      "What is the primary subject matter and executive summary of this document?",
-      "What are the key statistical metrics, data points, or tables included?",
-      "What actionable recommendations or critical conclusions are highlighted?"
-    ];
+    return QUESTION_PRESETS.general;
   }
 }
+
