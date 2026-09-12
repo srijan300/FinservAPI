@@ -21,13 +21,13 @@ export default function App() {
   const [apiEndpoint, setApiEndpoint] = useState('http://localhost:8000/api/v1/hackrx/run');
   const [bearerToken, setBearerToken] = useState('128c33fc16f4a70cab19dab48958d5bf246e7003a8bfd7eb0be2f617b48e662a');
   
-  // Document Input State
-  const [inputTab, setInputTab] = useState('url');
-  const [documentUrl, setDocumentUrl] = useState(SAMPLE_DOCUMENTS[0].url);
+  // Document Input State (Default to File Upload tab and empty inputs)
+  const [inputTab, setInputTab] = useState('upload');
+  const [documentUrl, setDocumentUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   
-  // Questions State
-  const [questions, setQuestions] = useState(SAMPLE_DOCUMENTS[0].questions);
+  // Questions State (Default to empty question prompt)
+  const [questions, setQuestions] = useState(['']);
   
   // Execution & Pipeline State
   const [isProcessing, setIsProcessing] = useState(false);
@@ -56,9 +56,22 @@ export default function App() {
 
   // Run RAG Pipeline Execution
   const handleRunPipeline = async () => {
+    setErrorDetails(null);
+
+    // Document Validation
+    if (inputTab === 'upload' && !selectedFile?.rawFile) {
+      setErrorDetails("⚠️ Please upload a document file (PDF, DOCX, or EML) using the drag-and-drop zone below.");
+      return;
+    }
+    if (inputTab === 'url' && (!documentUrl || !documentUrl.trim())) {
+      setErrorDetails("⚠️ Please enter a valid document URL or switch to the 'File Upload' tab.");
+      return;
+    }
+
+    // Question Validation
     const validQuestions = questions.filter(q => q && q.trim().length > 0);
     if (validQuestions.length === 0) {
-      alert("Please enter at least one question.");
+      setErrorDetails("⚠️ Please enter at least one question to analyze your document.");
       return;
     }
 
@@ -66,7 +79,6 @@ export default function App() {
     setCurrentStep(1);
     setResults(null);
     setRawResponse(null);
-    setErrorDetails(null);
 
     if (executionMode === 'demo') {
       // Step-by-step animated simulation
@@ -87,7 +99,7 @@ export default function App() {
       }, 300);
 
       try {
-        let finalDocUrl = documentUrl;
+        let finalDocUrl = documentUrl.trim();
 
         // If user uploaded a local file (PDF/DOCX/EML), upload it live to backend
         if (inputTab === 'upload' && selectedFile?.rawFile) {
@@ -96,8 +108,9 @@ export default function App() {
         }
 
         if (!finalDocUrl) {
-          alert("Please enter a valid document URL or select a file.");
+          setErrorDetails("⚠️ Document source invalid. Please upload a file or enter a document URL.");
           setIsProcessing(false);
+          clearInterval(stepInterval);
           return;
         }
 

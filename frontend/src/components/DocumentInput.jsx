@@ -75,22 +75,9 @@ export default function DocumentInput({
             <Globe className="absolute right-3.5 top-3.5 w-4 h-4 text-slate-500 pointer-events-none" />
           </div>
 
-          {/* Quick Preset Samples */}
-          <div className="space-y-1.5">
-            <span className="text-xs font-semibold text-slate-400">Quick Test Samples:</span>
-            <div className="flex flex-wrap gap-2">
-              {SAMPLE_DOCUMENTS.map((doc) => (
-                <button
-                  key={doc.id}
-                  onClick={() => onLoadSample(doc)}
-                  className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 transition-all flex items-center space-x-1.5"
-                >
-                  <FileCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{doc.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <p className="text-xs text-slate-400">
+            Paste a public document URL (e.g. direct PDF link or Google Drive share link).
+          </p>
         </div>
       )}
 

@@ -58,7 +58,7 @@ export default function QuestionBuilder({
               type="text"
               value={q}
               onChange={(e) => handleQuestionChange(idx, e.target.value)}
-              placeholder="e.g. What is the maximum limit for Domiciliary Hospitalisation?"
+              placeholder="Type your question here (e.g. What are the key findings or details in this document?)"
               className="flex-1 bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
             />
             {questions.length > 1 && (

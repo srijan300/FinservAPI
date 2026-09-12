@@ -130,30 +130,70 @@ class RAGPipeline:
 
     def _download_and_extract_text(self, url: str) -> str:
         """
-        Downloads a file from a URL and extracts text content based on its type.
+        Downloads a file from a local path or HTTP/HTTPS URL and extracts text content based on its type.
+        Supports PDF, DOCX, EML, and Google Drive links.
         """
         logger.info(f"Downloading and extracting text from {url}...")
         
-        # Determine file extension from URL
-        file_extension = url.split('?')[0].split('.')[-1].lower()
-        local_path = f"downloaded_doc.{file_extension}"
+        target_url = url.strip()
+        local_path = None
+        file_extension = "pdf"
 
-        if os.path.exists(url):
-            local_path = url
-        elif url.startswith("http://") or url.startswith("https://"):
-            response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-            response.raise_for_status()
+        # Check if local path exists
+        if os.path.exists(target_url):
+            local_path = target_url
+            ext = os.path.splitext(target_url)[1].lstrip('.').lower()
+            if ext in ['pdf', 'docx', 'eml']:
+                file_extension = ext
+        elif target_url.startswith("http://") or target_url.startswith("https://"):
+            # Handle Google Drive share links: convert /file/d/FILE_ID/view to direct download link
+            drive_match = re.search(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)', target_url)
+            if drive_match:
+                file_id = drive_match.group(1)
+                target_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                logger.info(f"Converted Google Drive link to direct download URL: {target_url}")
+
+            try:
+                response = requests.get(target_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+                if response.status_code == 409:
+                    raise ValueError("Public access is not permitted on this URL (HTTP 409). Please upload your document file directly using the File Upload option.")
+                elif response.status_code in (401, 403):
+                    raise ValueError(f"Access forbidden (HTTP {response.status_code}). Please verify permissions or upload your file directly.")
+                elif response.status_code == 404:
+                    raise ValueError("Document not found at the specified URL (HTTP 404). Please check the link or upload your file directly.")
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                raise ValueError(f"Failed to download document from URL: {str(e)}. Please check the URL or upload your file directly.")
+
+            # Infer file extension from headers or content
+            content_type = response.headers.get("Content-Type", "").lower()
+            url_ext = target_url.split('?')[0].split('.')[-1].lower() if '.' in target_url.split('?')[0] else ''
+            
+            if 'pdf' in content_type or url_ext == 'pdf' or response.content.startswith(b'%PDF'):
+                file_extension = 'pdf'
+                local_path = os.path.join(self.CACHE_DIR, "temp_downloaded_doc.pdf")
+            elif 'word' in content_type or url_ext == 'docx' or response.content.startswith(b'PK'):
+                file_extension = 'docx'
+                local_path = os.path.join(self.CACHE_DIR, "temp_downloaded_doc.docx")
+            elif 'email' in content_type or url_ext == 'eml':
+                file_extension = 'eml'
+                local_path = os.path.join(self.CACHE_DIR, "temp_downloaded_doc.eml")
+            else:
+                file_extension = 'pdf' if response.content.startswith(b'%PDF') else url_ext or 'pdf'
+                local_path = os.path.join(self.CACHE_DIR, f"temp_downloaded_doc.{file_extension}")
+
             with open(local_path, "wb") as f:
                 f.write(response.content)
         else:
-            raise ValueError(f"Document file path or URL not found: {url}")
+            raise ValueError(f"Document file path or URL not found: '{url}'. Please upload a file or provide a valid URL.")
 
         full_text = ""
         if file_extension == 'pdf':
             with pdfplumber.open(local_path) as pdf:
-                # (Your existing PDF extraction logic)
                 for page in pdf.pages:
-                    full_text += page.extract_text() + "\n"
+                    txt = page.extract_text()
+                    if txt:
+                        full_text += txt + "\n"
                     for table in page.find_tables():
                         if table.extract():
                             full_text += "\n" + self._table_to_markdown(table.extract()) + "\n"
@@ -173,11 +213,14 @@ class RAGPipeline:
                 raw_email = f.read()
             ep = eml_parser.EmlParser()
             parsed_eml = ep.decode_email_bytes(raw_email)
-            if parsed_eml['body']:
+            if parsed_eml.get('body'):
                 full_text = parsed_eml['body'][0]['content']
 
         else:
-            raise ValueError(f"Unsupported file type: {file_extension}")
+            raise ValueError(f"Unsupported file type: {file_extension}. Supported formats are PDF, DOCX, and EML.")
+
+        if not full_text.strip():
+            raise ValueError("No text could be extracted from the document. Please ensure the file contains readable text or tables.")
             
         return full_text
 
