@@ -67,8 +67,9 @@ export async function suggestQuestionsAPI(documentUrl) {
 export async function uploadDocumentFileAPI(rawFile) {
   const formData = new FormData();
   formData.append('file', rawFile);
+  const baseUrl = window.location.origin.includes('http') && !window.location.origin.includes('5173') ? window.location.origin : 'http://127.0.0.1:8000';
 
-  const response = await fetch('http://localhost:8000/api/v1/upload', {
+  const response = await fetch(`${baseUrl}/api/v1/upload`, {
     method: 'POST',
     body: formData
   });

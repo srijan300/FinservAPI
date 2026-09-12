@@ -1,5 +1,6 @@
 import React from 'react';
-import { FileText, Globe, UploadCloud, FileCheck, Trash2, CheckCircle2, FileCode } from 'lucide-react';
+import { FileText, Globe, UploadCloud, FileCheck, Trash2, CheckCircle2, FileCode, Loader2 } from 'lucide-react';
+import { uploadDocumentFileAPI } from '../services/api';
 
 export default function DocumentInput({
   inputTab,
@@ -9,8 +10,9 @@ export default function DocumentInput({
   selectedFile,
   setSelectedFile
 }) {
+  const [isUploading, setIsUploading] = React.useState(false);
 
-  const handleFileDrop = (e) => {
+  const handleFileDrop = async (e) => {
     e.preventDefault();
     const files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
     if (files && files[0]) {
@@ -23,7 +25,16 @@ export default function DocumentInput({
         lastModified: new Date(file.lastModified).toLocaleDateString()
       };
       setSelectedFile(fileData);
-      setDocumentUrl(`local://${file.name}`);
+      setIsUploading(true);
+      try {
+        const uploadRes = await uploadDocumentFileAPI(file);
+        setDocumentUrl(uploadRes.file_path || uploadRes.filename || file.name);
+      } catch (err) {
+        console.error("Upload error:", err);
+        setDocumentUrl(file.name);
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 

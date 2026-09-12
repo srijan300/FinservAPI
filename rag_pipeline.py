@@ -141,10 +141,23 @@ class RAGPipeline:
         local_path = None
         file_extension = "pdf"
 
-        # Check if local path exists
+        clean_url = target_url.replace("local://", "")
+        uploads_path = os.path.join(os.path.dirname(__file__), "uploads", os.path.basename(clean_url))
+
+        # Check if local path exists (direct, clean, or inside uploads/)
         if os.path.exists(target_url):
             local_path = target_url
             ext = os.path.splitext(target_url)[1].lstrip('.').lower()
+            if ext in ['pdf', 'docx', 'eml']:
+                file_extension = ext
+        elif os.path.exists(clean_url):
+            local_path = clean_url
+            ext = os.path.splitext(clean_url)[1].lstrip('.').lower()
+            if ext in ['pdf', 'docx', 'eml']:
+                file_extension = ext
+        elif os.path.exists(uploads_path):
+            local_path = uploads_path
+            ext = os.path.splitext(uploads_path)[1].lstrip('.').lower()
             if ext in ['pdf', 'docx', 'eml']:
                 file_extension = ext
         elif target_url.startswith("http://") or target_url.startswith("https://"):
