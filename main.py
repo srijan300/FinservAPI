@@ -105,7 +105,8 @@ async def suggest_questions(request_data: SuggestionRequest):
         return SuggestionResponse(questions=qs)
     except Exception as e:
         err_msg = str(e)
-        print(f"Error generating AI questions: {err_msg}")
+        safe_msg = err_msg.encode('ascii', 'ignore').decode('ascii')
+        print(f"Error generating AI questions: {safe_msg}")
         status_code = status.HTTP_429_TOO_MANY_REQUESTS if ("429" in err_msg or "quota" in err_msg.lower()) else status.HTTP_500_INTERNAL_SERVER_ERROR
         raise HTTPException(
             status_code=status_code,

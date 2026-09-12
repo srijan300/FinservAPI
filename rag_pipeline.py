@@ -329,7 +329,7 @@ Format requirements:
             logger.error(f"Error generating AI suggested questions: {e}")
             err_str = str(e)
             if "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower():
-                raise RuntimeError("⚠️ Google Gemini API Free-Tier Quota Limit Reached (429). Please wait 10-15 seconds before generating questions again.")
+                raise RuntimeError("Google Gemini API Free-Tier Quota Limit Reached (429). Please wait 10-15 seconds before generating questions again.")
             else:
                 short_err = err_str.split('\n')[0] if err_str else "LLM Generation Failed"
                 raise RuntimeError(f"Unable to generate AI questions: {short_err}")

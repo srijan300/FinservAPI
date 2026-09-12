@@ -16,9 +16,17 @@ export async function runSubmissionAPI({ endpoint, token, documentUrl, questions
     })
   });
 
-  const data = await response.json();
+  let data;
+  try {
+    data = await response.json();
+  } catch (err) {
+    if (!response.ok) {
+      throw new Error(`Server Error (${response.status}). Please check backend service logs.`);
+    }
+  }
+
   if (!response.ok) {
-    throw new Error(data.detail || `Server error ${response.status}`);
+    throw new Error(data?.detail || `Server error ${response.status}`);
   }
 
   return data;
@@ -36,9 +44,17 @@ export async function suggestQuestionsAPI(documentUrl) {
     body: JSON.stringify({ documents: documentUrl })
   });
 
-  const data = await response.json();
+  let data;
+  try {
+    data = await response.json();
+  } catch (err) {
+    if (!response.ok) {
+      throw new Error(`Server Error (${response.status}). Please check backend service logs.`);
+    }
+  }
+
   if (!response.ok) {
-    throw new Error(data.detail || 'Failed to generate AI questions');
+    throw new Error(data?.detail || `Failed to generate AI questions (${response.status})`);
   }
 
   return data.questions;
