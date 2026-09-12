@@ -37,18 +37,15 @@ async def lifespan(app: FastAPI):
     and the 'shutdown' part can be used for cleanup.
     """
     print("--- Server starting up ---")
-    has_valid_gemini = GENAI_KEY and GENAI_KEY.startswith("AIzaSy")
-    has_valid_openai = OPENAI_API_KEY and OPENAI_API_KEY.startswith("sk-")
+    has_gemini = bool(GENAI_KEY and GENAI_KEY != "your-gemini-api-key-here")
+    has_openai = bool(OPENAI_API_KEY and OPENAI_API_KEY.startswith("sk-"))
 
-    if has_valid_gemini:
-        ml_models["rag_pipeline"] = RAGPipeline(gemini_api_key=GENAI_KEY, openai_api_key=OPENAI_API_KEY if has_valid_openai else None)
-        print("--- RAG Pipeline Initialized (Google Gemini API - Primary) ---")
-    elif has_valid_openai:
+    if has_gemini:
+        ml_models["rag_pipeline"] = RAGPipeline(gemini_api_key=GENAI_KEY, openai_api_key=OPENAI_API_KEY if has_openai else None)
+        print("--- RAG Pipeline Initialized (Google Gemini API - Active) ---")
+    elif has_openai:
         ml_models["rag_pipeline"] = RAGPipeline(openai_api_key=OPENAI_API_KEY)
         print("--- RAG Pipeline Initialized (OpenAI API - Active) ---")
-    elif GENAI_KEY and GENAI_KEY != "your-gemini-api-key-here":
-        ml_models["rag_pipeline"] = RAGPipeline(gemini_api_key=GENAI_KEY, openai_api_key=OPENAI_API_KEY if has_valid_openai else None)
-        print("--- RAG Pipeline Initialized (Google Gemini API) ---")
     else:
         print("WARNING: Neither GEMINI_API_KEY nor OPENAI_API_KEY is properly set.")
     yield

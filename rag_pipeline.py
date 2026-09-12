@@ -423,19 +423,21 @@ Answer:"""
 
             # Fallback to direct chunk retrieval answer if LLM APIs fail
             formatted_chunks = "\n\n".join([f"> **Excerpt {i+1}**: {chunk[:300]}..." for i, chunk in enumerate(top_chunks[:2])])
-            return f"📌 **Document Grounded Excerpt** *(LLM API offline/quota limited)*:\n\n{formatted_chunks}"
+            return f"**[Document Grounded Excerpt]** *(LLM API offline/quota limit)*:\n\n{formatted_chunks}"
         except Exception as e:
             logger.error(f"Error during LLM API call: {e}")
             formatted_chunks = "\n\n".join([f"> {c[:250]}..." for c in top_chunks[:2]])
-            return f"📌 **Extracted Document Reference**:\n\n{formatted_chunks}"
+            return f"**[Extracted Document Reference]**:\n\n{formatted_chunks}"
 
     def _process_single_question(self, question: str) -> str:
         """Helper function to process one question for parallel execution."""
         retrieved = self._retrieve_chunks(question)
         reranked = self._rerank_chunks(question, retrieved)
         answer = self._generate_answer(question, reranked)
-        logger.info(f"Question-----> {question}")
-        logger.info(f"Answer-------> {answer}")
+        safe_q = question.encode('ascii', 'ignore').decode('ascii')
+        safe_a = answer.encode('ascii', 'ignore').decode('ascii')
+        logger.info(f"Question-----> {safe_q}")
+        logger.info(f"Answer-------> {safe_a[:100]}...")
         return answer
 
     def answer_questions(self, questions: list[str]) -> list[str]:
