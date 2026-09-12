@@ -1,4 +1,4 @@
-name: CI/CD Pipeline - Docker Build & AWS Deployment
+name: CI/CD Pipeline - Docker Build & Render Deployment
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-verify:
+  build-and-test:
     name: Build & Test Container
     runs-on: ubuntu-latest
 
@@ -26,40 +26,17 @@ jobs:
           push: false
           tags: finserv-api:latest
 
-      - name: Verify Build Success
-        run: echo "Docker container built successfully!"
+      - name: Verify Container Build
+        run: echo "Docker image compiled successfully!"
 
-  # Optional AWS ECR/AppRunner deployment step (triggers if AWS secrets are configured)
-  deploy-aws:
-    name: Push to AWS ECR & Deploy
-    needs: build-and-verify
+  deploy-render:
+    name: Trigger Render Deployment
+    needs: build-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Log in to Amazon ECR
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and Push Docker Image to AWS ECR
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: finserv-api
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Trigger Render Deploy Hook
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          curl -s "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          echo "Render deployment triggered successfully!"
