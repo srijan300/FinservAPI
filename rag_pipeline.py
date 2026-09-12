@@ -323,15 +323,16 @@ Format requirements:
                     return lines[:3]
                 elif len(lines) > 0:
                     return lines
+            
+            raise RuntimeError("LLM did not return valid questions for this document.")
         except Exception as e:
             logger.error(f"Error generating AI suggested questions: {e}")
-        
-        # Smart context fallback if LLM quota is reached
-        return [
-            "What is the primary subject matter and executive summary of this document?",
-            "What are the key statistical metrics, data points, or tables included?",
-            "What actionable recommendations or critical conclusions are highlighted?"
-        ]
+            err_str = str(e)
+            if "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower():
+                raise RuntimeError("⚠️ Google Gemini API Free-Tier Quota Limit Reached (429). Please wait 10-15 seconds before generating questions again.")
+            else:
+                short_err = err_str.split('\n')[0] if err_str else "LLM Generation Failed"
+                raise RuntimeError(f"Unable to generate AI questions: {short_err}")
 
     def _retrieve_chunks(self, query: str) -> list[str]:
         if not self.is_ready:

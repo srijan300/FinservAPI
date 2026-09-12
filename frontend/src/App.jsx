@@ -7,7 +7,6 @@ import PipelineVisualizer from './components/PipelineVisualizer';
 import ResultsPanel from './components/ResultsPanel';
 import Footer from './components/Footer';
 
-import { generateSemanticQuestionsForDocument } from './constants/mockData';
 import { runSubmissionAPI, uploadDocumentFileAPI, suggestQuestionsAPI, generateDemoSimulationAnswers } from './services/api';
 
 export default function App() {
@@ -50,6 +49,7 @@ export default function App() {
 
   // Handler to auto-generate LIVE AI questions by sending document text to Gemini LLM
   const handleSuggestQuestions = async () => {
+    setErrorDetails(null);
     let targetDocUrl = documentUrl ? documentUrl.trim() : '';
 
     if (inputTab === 'upload' && selectedFile?.rawFile) {
@@ -58,13 +58,14 @@ export default function App() {
         const uploadRes = await uploadDocumentFileAPI(selectedFile.rawFile);
         targetDocUrl = uploadRes.file_path || uploadRes.url;
       } catch (err) {
-        console.error("File upload error during suggestion:", err);
+        setIsSuggesting(false);
+        setErrorDetails(`⚠️ Failed to upload file for AI analysis: ${err.message}`);
+        return;
       }
     }
 
     if (!targetDocUrl) {
-      // Fallback if no document loaded yet
-      setQuestions(generateSemanticQuestionsForDocument(selectedFile?.name || documentUrl));
+      setErrorDetails("⚠️ Please upload a document file (PDF, DOCX, EML) or enter a document URL first to generate AI questions.");
       return;
     }
 
@@ -74,11 +75,10 @@ export default function App() {
       if (aiQuestions && aiQuestions.length > 0) {
         setQuestions(aiQuestions);
       } else {
-        setQuestions(generateSemanticQuestionsForDocument(selectedFile?.name || documentUrl));
+        setErrorDetails("⚠️ LLM did not return questions for this document. Please try typing a custom question.");
       }
     } catch (err) {
-      console.warn("Falling back to semantic question generator:", err);
-      setQuestions(generateSemanticQuestionsForDocument(selectedFile?.name || documentUrl));
+      setErrorDetails(err.message || "⚠️ Google Gemini API Free-Tier Quota Limit Reached (429). Please wait 10-15 seconds before trying again.");
     } finally {
       setIsSuggesting(false);
     }

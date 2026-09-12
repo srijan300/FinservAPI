@@ -104,12 +104,13 @@ async def suggest_questions(request_data: SuggestionRequest):
         qs = pipeline.generate_ai_suggested_questions(request_data.documents)
         return SuggestionResponse(questions=qs)
     except Exception as e:
-        print(f"Error generating AI questions: {e}")
-        return SuggestionResponse(questions=[
-            "What is the primary subject matter and executive summary of this document?",
-            "What are the key statistical metrics, data points, or tables included?",
-            "What actionable recommendations or critical conclusions are highlighted?"
-        ])
+        err_msg = str(e)
+        print(f"Error generating AI questions: {err_msg}")
+        status_code = status.HTTP_429_TOO_MANY_REQUESTS if ("429" in err_msg or "quota" in err_msg.lower()) else status.HTTP_500_INTERNAL_SERVER_ERROR
+        raise HTTPException(
+            status_code=status_code,
+            detail=err_msg
+        )
 
 @api_router.post(
     "/hackrx/run",
