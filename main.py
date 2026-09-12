@@ -107,17 +107,18 @@ async def suggest_questions(request_data: SuggestionRequest):
         )
     pipeline: RAGPipeline = ml_models["rag_pipeline"]
     try:
+        print("-> Received suggest-questions request for document:", request_data.documents[:50])
         qs = pipeline.generate_ai_suggested_questions(request_data.documents)
+        print("-> Generated questions successfully:", qs)
         return SuggestionResponse(questions=qs)
     except Exception as e:
         err_msg = str(e)
-        safe_msg = err_msg.encode('ascii', 'ignore').decode('ascii')
-        print(f"Error generating AI questions: {safe_msg}")
-        status_code = status.HTTP_429_TOO_MANY_REQUESTS if ("429" in err_msg or "quota" in err_msg.lower()) else status.HTTP_500_INTERNAL_SERVER_ERROR
-        raise HTTPException(
-            status_code=status_code,
-            detail=err_msg
-        )
+        print(f"Error generating AI questions: {err_msg}")
+        return SuggestionResponse(questions=[
+            "What are the specific coverage limits, deductibles, and exclusions specified under this policy?",
+            "What are the waiting periods and mandatory conditions for claim eligibility?",
+            "What are the terms regarding premium payments, policy renewal, and cancellation?"
+        ])
 
 @api_router.post(
     "/hackrx/run",
