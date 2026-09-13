@@ -28,9 +28,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     NUMEXPR_NUM_THREADS=1 \
     TOKENIZERS_PARALLELISM=false
 
-# Install Python dependencies (with CPU-only torch to reduce memory and image size)
+# Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir torch==2.3.0 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download lightweight HuggingFace model & NLTK data during build
