@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: finserv-api
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SECURITY_TOKEN
+        value: 128c33fc16f4a70cab19dab48958d5bf246e7003a8bfd7eb0be2f617b48e662a
+      - key: PYTHONUNBUFFERED
+        value: "1"

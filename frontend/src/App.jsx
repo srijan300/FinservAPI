@@ -17,7 +17,12 @@ export default function App() {
   const [executionMode, setExecutionMode] = useState('live');
   
   // API Config State
-  const [apiEndpoint, setApiEndpoint] = useState('http://localhost:8000/api/v1/hackrx/run');
+  const [apiEndpoint, setApiEndpoint] = useState(() => {
+    if (typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('5173')) {
+      return `${window.location.origin}/api/v1/hackrx/run`;
+    }
+    return 'http://localhost:8000/api/v1/hackrx/run';
+  });
   const [bearerToken, setBearerToken] = useState('128c33fc16f4a70cab19dab48958d5bf246e7003a8bfd7eb0be2f617b48e662a');
   
   // Document Input State (Default to File Upload tab and empty inputs)

@@ -71,7 +71,7 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
         )
     print("SUCCESS: Team token loaded successfully")
 
-from fastapi import FastAPI, Depends, HTTPException, status, APIRouter, Header, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, status, APIRouter, Header, File, UploadFile, Request
 
 uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(uploads_dir, exist_ok=True)
@@ -80,12 +80,13 @@ os.makedirs(uploads_dir, exist_ok=True)
 api_router = APIRouter(prefix="/api/v1")
 
 @api_router.post("/upload", summary="Upload document for live parsing")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(request: Request, file: UploadFile = File(...)):
     file_path = os.path.join(uploads_dir, file.filename)
     with open(file_path, "wb") as f:
         content = await file.read()
         f.write(content)
-    return {"filename": file.filename, "file_path": file_path, "url": f"http://localhost:8000/uploads/{file.filename}"}
+    base_url = str(request.base_url).rstrip('/')
+    return {"filename": file.filename, "file_path": file_path, "url": f"{base_url}/uploads/{file.filename}"}
 
 @api_router.post("/suggest-questions", response_model=SuggestionResponse, summary="Generate AI-based questions from document text")
 async def suggest_questions(request_data: SuggestionRequest):
@@ -172,6 +173,9 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+
+if os.path.exists(uploads_dir):
+    app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
