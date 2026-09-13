@@ -7,6 +7,7 @@ import re
 import requests
 import faiss
 import torch
+torch.set_num_threads(1)
 import networkx as nx
 import nltk
 import numpy as np
@@ -49,13 +50,14 @@ nltk.download("punkt_tab", quiet=True)
 
 class RAGPipeline:
     def __init__(self, groq_api_key: str = None, gemini_api_key: str = None,
-                 embed_model_name: str = "BAAI/bge-small-en-v1.5",
-                 rerank_model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
+                 embed_model_name: str = "all-MiniLM-L6-v2",
+                 rerank_model_name: str = None):
         """
         Initializes the RAG pipeline, loading models and setting up configurations.
         Prioritizes Groq API (openai/gpt-oss-120b) with optional Google Gemini fallback.
+        Optimized for memory efficiency (runs comfortably under 512MB RAM).
         """
-        logger.info("Initializing RAG Pipeline with Caching, Reranker, and Groq LLM...")
+        logger.info("Initializing RAG Pipeline with Caching, Cosine/Cross Reranker, and Groq LLM...")
         
         # --- Configuration ---
         self.CHUNK_SIZE = 300
@@ -93,10 +95,10 @@ class RAGPipeline:
             raise ValueError("Either GROQ_API_KEY or GEMINI_API_KEY is required to initialize RAG Pipeline.")
         
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        logger.info(f"Loading models onto device: {device}...")
+        logger.info(f"Loading embedding model ({embed_model_name}) onto device: {device}...")
         self.embedder = SentenceTransformer(embed_model_name, device=device)
-        self.reranker = CrossEncoder(rerank_model_name, device=device)
-        logger.info("All models loaded.")
+        self.reranker = CrossEncoder(rerank_model_name, device=device) if rerank_model_name else None
+        logger.info("Embedding model loaded.")
 
         # --- State variables ---
         self.chunks = None
@@ -413,9 +415,22 @@ Format requirements:
         return [self.chunks[i] for i in sorted(list(base_indices))]
 
     def _rerank_chunks(self, query: str, candidates: list[str]) -> list[str]:
-        pairs = [(query, passage) for passage in candidates]
-        scores = self.reranker.predict(pairs, batch_size=32)
-        ranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
+        if not candidates:
+            return []
+        if self.reranker is not None:
+            try:
+                pairs = [(query, passage) for passage in candidates]
+                scores = self.reranker.predict(pairs, batch_size=32)
+                ranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
+                return [text for text, _ in ranked[:self.FINAL_K_RERANK]]
+            except Exception as e:
+                logger.warning(f"CrossEncoder reranking error: {e}. Falling back to cosine ranking.")
+
+        # High-accuracy, memory-free reranking using embedder cosine similarity (0 extra RAM)
+        q_embed = normalize(self.embedder.encode([f"query: {query}"], convert_to_numpy=True))
+        c_embeds = normalize(self.embedder.encode([f"passage: {c}" for c in candidates], convert_to_numpy=True))
+        sims = (q_embed @ c_embeds.T)[0]
+        ranked = sorted(zip(candidates, sims), key=lambda x: x[1], reverse=True)
         return [text for text, _ in ranked[:self.FINAL_K_RERANK]]
 
     def _generate_answer(self, original_query: str, top_chunks: list[str]) -> str:

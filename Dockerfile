@@ -21,16 +21,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers_cache \
-    NLTK_DATA=/tmp/nltk_data
+    NLTK_DATA=/tmp/nltk_data \
+    OMP_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
+    TOKENIZERS_PARALLELISM=false
 
-# Install Python dependencies
+# Install Python dependencies (with CPU-only torch to reduce memory and image size)
 COPY requirements.txt .
+RUN pip install --no-cache-dir torch==2.3.0 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download HuggingFace models & NLTK data into container during build
-RUN python -c "from sentence_transformers import SentenceTransformer, CrossEncoder; import nltk; \
-    SentenceTransformer('BAAI/bge-small-en-v1.5'); \
-    CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2'); \
+# Pre-download lightweight HuggingFace model & NLTK data during build
+RUN python -c "from sentence_transformers import SentenceTransformer; import nltk; \
+    SentenceTransformer('all-MiniLM-L6-v2'); \
     nltk.download('punkt_tab', download_dir='/tmp/nltk_data')"
 
 # Copy backend application source code
