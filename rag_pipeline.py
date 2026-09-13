@@ -23,7 +23,15 @@ from typing import List
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-import google.generativeai as genai
+try:
+    from groq import Groq
+except ImportError:
+    Groq = None
+
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 
 # Set up logging
 
@@ -40,14 +48,14 @@ nltk.data.path.append('/tmp/nltk_data')
 nltk.download("punkt_tab", quiet=True)
 
 class RAGPipeline:
-    def __init__(self, gemini_api_key: str = None,
+    def __init__(self, groq_api_key: str = None, gemini_api_key: str = None,
                  embed_model_name: str = "BAAI/bge-small-en-v1.5",
                  rerank_model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
         """
         Initializes the RAG pipeline, loading models and setting up configurations.
-        Uses Google Gemini API exclusively.
+        Prioritizes Groq API (openai/gpt-oss-120b) with optional Google Gemini fallback.
         """
-        logger.info("Initializing RAG Pipeline with Caching and Reranker...")
+        logger.info("Initializing RAG Pipeline with Caching, Reranker, and Groq LLM...")
         
         # --- Configuration ---
         self.CHUNK_SIZE = 300
@@ -57,15 +65,32 @@ class RAGPipeline:
         self.CACHE_DIR = "cache"
 
         # --- Model and API Setup ---
+        self.groq_client = None
+        self.groq_model = "openai/gpt-oss-120b"
+        self.groq_fallback_model = "openai/gpt-oss-20b"
         self.gemini_model = None
 
-        if gemini_api_key:
-            genai.configure(api_key=gemini_api_key)
-            self.gemini_model = genai.GenerativeModel("gemini-2.5-flash")
-            logger.info("Configured Google Gemini API (gemini-2.5-flash).")
+        if groq_api_key:
+            try:
+                if Groq is not None:
+                    self.groq_client = Groq(api_key=groq_api_key)
+                else:
+                    import groq
+                    self.groq_client = groq.Groq(api_key=groq_api_key)
+                logger.info(f"Configured Groq API client with model: {self.groq_model}.")
+            except Exception as e:
+                logger.error(f"Failed to initialize Groq client: {e}")
 
-        if not self.gemini_model:
-            raise ValueError("GEMINI_API_KEY is required to initialize RAG Pipeline.")
+        if gemini_api_key and genai is not None:
+            try:
+                genai.configure(api_key=gemini_api_key)
+                self.gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+                logger.info("Configured Google Gemini API (gemini-2.5-flash).")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Gemini model: {e}")
+
+        if not self.groq_client and not self.gemini_model:
+            raise ValueError("Either GROQ_API_KEY or GEMINI_API_KEY is required to initialize RAG Pipeline.")
         
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         logger.info(f"Loading models onto device: {device}...")
@@ -332,9 +357,33 @@ Format requirements:
 - Do NOT include numbers, bullet points, asterisks, or extra intro text.
 - Each question must be a complete sentence ending with a question mark."""
 
-            logger.info("Generating dynamic AI questions using Google Gemini LLM based on extracted document content...")
+            # 1. Try Groq API first
+            if self.groq_client:
+                logger.info("Generating dynamic AI questions using Groq LLM based on extracted document content...")
+                for model_choice in [self.groq_model, self.groq_fallback_model]:
+                    try:
+                        completion = self.groq_client.chat.completions.create(
+                            model=model_choice,
+                            messages=[
+                                {"role": "system", "content": "You are a professional document analyst that returns only exact question lists without numbering or commentary."},
+                                {"role": "user", "content": prompt}
+                            ],
+                            temperature=0.3,
+                            max_tokens=250
+                        )
+                        raw_text = completion.choices[0].message.content or ""
+                        lines = [line.strip().lstrip('123456789.-* ') for line in raw_text.strip().split('\n') if line.strip() and '?' in line]
+                        if len(lines) >= 3:
+                            return lines[:3]
+                        elif len(lines) > 0:
+                            return lines
+                    except Exception as groq_err:
+                        logger.warning(f"Groq API call ({model_choice}) failed: {groq_err}.")
+
+            # 2. Try Google Gemini API
             if self.gemini_model:
                 try:
+                    logger.info("Generating dynamic AI questions using Google Gemini LLM based on extracted document content...")
                     response = self.gemini_model.generate_content(prompt)
                     lines = [line.strip().lstrip('123456789.-* ') for line in response.text.strip().split('\n') if line.strip() and '?' in line]
                     if len(lines) >= 3:
@@ -382,16 +431,43 @@ Question:
 
 Answer:"""
         try:
+            # 1. Try Groq LLM first
+            if self.groq_client:
+                for model_choice in [self.groq_model, self.groq_fallback_model]:
+                    try:
+                        completion = self.groq_client.chat.completions.create(
+                            model=model_choice,
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "You are an accurate, concise question-answering assistant for policy audits. Answer questions directly using only the provided context. Keep answers clear and succinct."
+                                },
+                                {
+                                    "role": "user",
+                                    "content": prompt
+                                }
+                            ],
+                            temperature=0.2,
+                            max_tokens=400
+                        )
+                        ans = completion.choices[0].message.content
+                        if ans and ans.strip():
+                            return ans.strip()
+                    except Exception as groq_err:
+                        logger.warning(f"Groq API call ({model_choice}) failed: {groq_err}.")
+
+            # 2. Try Google Gemini second
             if self.gemini_model:
                 try:
                     response = self.gemini_model.generate_content(prompt)
-                    return response.text.strip()
+                    if response.text and response.text.strip():
+                        return response.text.strip()
                 except Exception as gemini_err:
                     logger.warning(f"Google Gemini API call failed: {gemini_err}.")
 
             # Fallback to direct chunk retrieval answer if LLM APIs fail
             formatted_chunks = "\n\n".join([f"> **Excerpt {i+1}**: {chunk[:300]}..." for i, chunk in enumerate(top_chunks[:2])])
-            return f"**[Document Grounded Excerpt]** *(Google Gemini API quota limit/delay)*:\n\n{formatted_chunks}"
+            return f"**[Document Grounded Excerpt]**:\n\n{formatted_chunks}"
         except Exception as e:
             logger.error(f"Error during LLM API call: {e}")
             formatted_chunks = "\n\n".join([f"> {c[:250]}..." for c in top_chunks[:2]])

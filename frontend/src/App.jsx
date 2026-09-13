@@ -83,7 +83,7 @@ export default function App() {
         setErrorDetails("⚠️ LLM did not return questions for this document. Please try typing a custom question.");
       }
     } catch (err) {
-      setErrorDetails(err.message || "⚠️ Google Gemini API Free-Tier Quota Limit Reached (429). Please wait 10-15 seconds before trying again.");
+      setErrorDetails(err.message || "⚠️ LLM API request limit reached. Please wait a moment before trying again.");
     } finally {
       setIsSuggesting(false);
     }

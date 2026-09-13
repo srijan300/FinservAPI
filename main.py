@@ -21,6 +21,7 @@ load_dotenv() # Load environment variables from a .env file
 # Load secrets and configs from environment variables
 # In a real app, use a more robust secrets management system.
 SECURITY_TOKEN = os.getenv("SECURITY_TOKEN", "128c33fc16f4a70cab19dab48958d5bf246e7003a8bfd7eb0be2f617b48e662a")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GENAI_KEY = os.getenv("GENAI_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
 # This dictionary will hold our initialized RAG pipeline instance.
@@ -35,11 +36,12 @@ async def lifespan(app: FastAPI):
     and the 'shutdown' part can be used for cleanup.
     """
     print("--- Server starting up ---")
-    if GENAI_KEY and GENAI_KEY != "your-gemini-api-key-here":
-        ml_models["rag_pipeline"] = RAGPipeline(gemini_api_key=GENAI_KEY)
-        print("--- RAG Pipeline Initialized (Google Gemini API - Exclusive Engine) ---")
+    if GROQ_API_KEY or (GENAI_KEY and GENAI_KEY != "your-gemini-api-key-here"):
+        ml_models["rag_pipeline"] = RAGPipeline(groq_api_key=GROQ_API_KEY, gemini_api_key=GENAI_KEY)
+        engine = "Groq API (openai/gpt-oss-120b)" if GROQ_API_KEY else "Google Gemini API"
+        print(f"--- RAG Pipeline Initialized ({engine}) ---")
     else:
-        print("WARNING: GEMINI_API_KEY is not properly set in .env file.")
+        print("WARNING: Neither GROQ_API_KEY nor GEMINI_API_KEY is properly set in environment.")
     yield
     # Clean up the ML models and release the resources
     print("--- Server shutting down ---")
@@ -126,7 +128,7 @@ async def run_submission(request_data: SubmissionRequest):
     if "rag_pipeline" not in ml_models:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OPENAI_API_KEY is not configured in .env file. Please add your key."
+            detail="RAG Pipeline is not initialized. Please configure GROQ_API_KEY or GEMINI_API_KEY."
         )
     pipeline: RAGPipeline = ml_models["rag_pipeline"]
     
