@@ -1,6 +1,8 @@
 # 🛡️ FinServe: Intelligent Document QA Platform
 > **Enterprise-Grade Retrieval-Augmented Generation (RAG) Platform for Fintech, Insurance, and Complex Audit Documents**
 
+[![Live Deployment](https://img.shields.io/badge/Live_Deployment-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://finservapi-2v8x.onrender.com/)
+[![CI/CD Pipeline](https://img.shields.io/github/actions/workflow/status/srijan300/FinservAPI/deploy.yml?branch=main&label=CI/CD%20Pipeline&style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/srijan300/FinservAPI/actions)
 [![Python 3.10](https://img.shields.io/badge/Python-3.10-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
@@ -10,11 +12,16 @@
 
 ---
 
+### 🌐 Live Production URL
+> 🚀 **Access Live Platform**: [https://finservapi-2v8x.onrender.com/](https://finservapi-2v8x.onrender.com/)
+
+---
+
 ## 📌 Executive Summary
 
 **FinServe** is an enterprise-grade document intelligence platform designed to extract, rerank, and synthesize precise answers from dense financial contracts, insurance policies, balance sheets, and audit reports.
 
-Built with a **two-stage retrieval pipeline** (`BAAI/bge-small-en-v1.5` embeddings + `ms-marco-MiniLM-L-6-v2` cross-encoder reranking), FinServe guarantees strictly grounded answer synthesis with zero hallucination. Powered exclusively by **Google Gemini 2.5 Flash**, it features an interactive React dashboard, live dynamic AI question suggestion, grounded document fallback resilience, and full multi-stage Docker support for zero-downtime deployment.
+Built with a **two-stage retrieval pipeline** (`BAAI/bge-small-en-v1.5` embeddings + `ms-marco-MiniLM-L-6-v2` cross-encoder reranking), FinServe guarantees strictly grounded answer synthesis with zero hallucination. Powered exclusively by **Google Gemini 2.5 Flash**, it features an interactive React dashboard, live dynamic AI question suggestion, grounded document fallback resilience, automated GitHub Actions CI/CD, and full multi-stage Docker support for zero-downtime deployment.
 
 ---
 
@@ -65,17 +72,38 @@ flowchart TD
 
 ---
 
+## 🔄 CI/CD Pipeline & Automated Deployment
+
+This repository uses **GitHub Actions** (`.github/workflows/deploy.yml`) for automated continuous integration and continuous deployment:
+
+```mermaid
+flowchart LR
+    GitPush[🐙 Git Push to main] --> GHActions[⚡ GitHub Actions Runner]
+    GHActions --> BuildX[🐳 Multi-Stage Docker Build Verification]
+    BuildX --> Test[🧪 Verify Container Compilation]
+    Test -->|On Success| Render[☁️ Render Webhook Deploy Hook]
+    Render --> Live[🚀 Live Production Platform\nfinservapi-2v8x.onrender.com]
+```
+
+### GitHub Actions Workflow Details
+1. **Container Build Verification**: Every `push` and `pull_request` to `main` triggers a complete multi-stage Docker build (`Node 18` frontend compilation + `Python 3.10-slim` server setup + pre-downloading SentenceTransformer models).
+2. **Automated Render Deploy Hook**: Upon successful build verification on `main`, GitHub Actions triggers Render's deployment hook for zero-downtime production rollout.
+
+---
+
 ## 🛠️ Tech Stack & Dependencies
 
 | Component | Technology | Description |
 | :--- | :--- | :--- |
+| **Live Production Deployment** | Render.com | Free-tier Docker container cloud web service |
+| **CI/CD Pipeline** | GitHub Actions | Automated build verification & deploy hooks |
 | **Frontend Framework** | React 18 + Vite | High-performance SPA with Tailwind CSS |
 | **Backend Framework** | FastAPI (Python 3.10) | Async REST API with Pydantic validation |
 | **Embeddings** | BAAI/bge-small-en-v1.5 | 384-dimensional dense vector embeddings |
 | **Reranker** | CrossEncoder MiniLM | Precision reranking model |
 | **Vector Store** | FAISS | In-memory inner-product vector index |
 | **LLM Engine** | Google Gemini 2.5 Flash | Exclusive LLM answer synthesis engine |
-| **Containerization** | Docker | Multi-stage build (Node 18 + Python 3.10 slim) |
+| **Containerization** | Docker | Multi-stage build (`Node 18` + `Python 3.10-slim`) |
 
 ---
 
@@ -180,4 +208,5 @@ Uploads a local document file (PDF, DOCX, EML) to the backend for live parsing.
 ## 👨‍💻 Developed By
 
 **Developed with ❤️ by Srijan Paul**  
-* GitHub: [@srijan300](https://github.com/srijan300)
+* GitHub: [@srijan300](https://github.com/srijan300)  
+* Live Platform: [https://finservapi-2v8x.onrender.com/](https://finservapi-2v8x.onrender.com/)
