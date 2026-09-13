@@ -29,11 +29,6 @@ try:
 except ImportError:
     Groq = None
 
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
-
 # Set up logging
 
 logger = logging.getLogger(__name__)
@@ -53,11 +48,10 @@ class RAGPipeline:
                  embed_model_name: str = "all-MiniLM-L6-v2",
                  rerank_model_name: str = None):
         """
-        Initializes the RAG pipeline, loading models and setting up configurations.
-        Prioritizes Groq API (openai/gpt-oss-120b) with optional Google Gemini fallback.
-        Optimized for memory efficiency (runs comfortably under 512MB RAM).
+        Initializes the RAG pipeline with Groq API as the primary high-speed LLM engine.
+        Embedder is lazy-loaded on the first request to guarantee instant startup under 512MB RAM.
         """
-        logger.info("Initializing RAG Pipeline with Caching, Cosine/Cross Reranker, and Groq LLM...")
+        logger.info("Initializing RAG Pipeline with Groq LLM (instant startup)...")
         
         # --- Configuration ---
         self.CHUNK_SIZE = 300
@@ -70,7 +64,6 @@ class RAGPipeline:
         self.groq_client = None
         self.groq_model = "openai/gpt-oss-120b"
         self.groq_fallback_model = "openai/gpt-oss-20b"
-        self.gemini_model = None
 
         if groq_api_key:
             try:
@@ -83,22 +76,23 @@ class RAGPipeline:
             except Exception as e:
                 logger.error(f"Failed to initialize Groq client: {e}")
 
-        if gemini_api_key and genai is not None:
-            try:
-                genai.configure(api_key=gemini_api_key)
-                self.gemini_model = genai.GenerativeModel("gemini-2.5-flash")
-                logger.info("Configured Google Gemini API (gemini-2.5-flash).")
-            except Exception as e:
-                logger.warning(f"Failed to initialize Gemini model: {e}")
-
-        if not self.groq_client and not self.gemini_model:
-            raise ValueError("Either GROQ_API_KEY or GEMINI_API_KEY is required to initialize RAG Pipeline.")
+        if not self.groq_client:
+            raise ValueError("GROQ_API_KEY is required to initialize RAG Pipeline.")
         
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        logger.info(f"Loading embedding model ({embed_model_name}) onto device: {device}...")
-        self.embedder = SentenceTransformer(embed_model_name, device=device)
-        self.reranker = CrossEncoder(rerank_model_name, device=device) if rerank_model_name else None
-        logger.info("Embedding model loaded.")
+        self.embed_model_name = embed_model_name
+        self._embedder = None
+        self.reranker = None
+        logger.info("RAG Pipeline ready (embedder configured for lazy loading).")
+
+    @property
+    def embedder(self):
+        """Lazy load SentenceTransformer embedder on demand to preserve startup memory."""
+        if self._embedder is None:
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            logger.info(f"Lazy-loading embedding model ({self.embed_model_name}) on device: {device}...")
+            self._embedder = SentenceTransformer(self.embed_model_name, device=device)
+            logger.info("Embedding model loaded successfully.")
+        return self._embedder
 
         # --- State variables ---
         self.chunks = None
@@ -382,19 +376,6 @@ Format requirements:
                     except Exception as groq_err:
                         logger.warning(f"Groq API call ({model_choice}) failed: {groq_err}.")
 
-            # 2. Try Google Gemini API
-            if self.gemini_model:
-                try:
-                    logger.info("Generating dynamic AI questions using Google Gemini LLM based on extracted document content...")
-                    response = self.gemini_model.generate_content(prompt)
-                    lines = [line.strip().lstrip('123456789.-* ') for line in response.text.strip().split('\n') if line.strip() and '?' in line]
-                    if len(lines) >= 3:
-                        return lines[:3]
-                    elif len(lines) > 0:
-                        return lines
-                except Exception as gemini_err:
-                    logger.warning(f"Google Gemini API call failed: {gemini_err}. Using heuristic fallback...")
-
             logger.info("Using smart document heuristic question generator...")
             return self._generate_heuristic_questions(sample_text)
         except Exception as e:
@@ -471,16 +452,7 @@ Answer:"""
                     except Exception as groq_err:
                         logger.warning(f"Groq API call ({model_choice}) failed: {groq_err}.")
 
-            # 2. Try Google Gemini second
-            if self.gemini_model:
-                try:
-                    response = self.gemini_model.generate_content(prompt)
-                    if response.text and response.text.strip():
-                        return response.text.strip()
-                except Exception as gemini_err:
-                    logger.warning(f"Google Gemini API call failed: {gemini_err}.")
-
-            # Fallback to direct chunk retrieval answer if LLM APIs fail
+            # Fallback to direct chunk retrieval answer if Groq API fails
             formatted_chunks = "\n\n".join([f"> **Excerpt {i+1}**: {chunk[:300]}..." for i, chunk in enumerate(top_chunks[:2])])
             return f"**[Document Grounded Excerpt]**:\n\n{formatted_chunks}"
         except Exception as e:
