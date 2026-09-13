@@ -14,7 +14,7 @@
 
 **FinServe** is an enterprise-grade document intelligence platform designed to extract, rerank, and synthesize precise answers from dense financial contracts, insurance policies, balance sheets, and audit reports.
 
-Built with a **two-stage retrieval pipeline** (`BAAI/bge-small-en-v1.5` embeddings + `ms-marco-MiniLM-L-6-v2` cross-encoder reranking), FinServe guarantees strictly grounded answer synthesis with zero hallucination. It features an interactive React dashboard, live dynamic AI question suggestion, multi-LLM fallback resilience, and full multi-stage Docker support for zero-downtime deployment.
+Built with a **two-stage retrieval pipeline** (`BAAI/bge-small-en-v1.5` embeddings + `ms-marco-MiniLM-L-6-v2` cross-encoder reranking), FinServe guarantees strictly grounded answer synthesis with zero hallucination. Powered exclusively by **Google Gemini 2.5 Flash**, it features an interactive React dashboard, live dynamic AI question suggestion, grounded document fallback resilience, and full multi-stage Docker support for zero-downtime deployment.
 
 ---
 
@@ -30,7 +30,7 @@ flowchart TD
     
     Q[❓ User Query] --> E
     E -->|Top 12 Candidates| R[🎯 Cross-Encoder Reranker\nms-marco-MiniLM-L-6-v2]
-    R -->|Top 5 Context Chunks| S[🧠 LLM Synthesis Engine\nGoogle Gemini 2.5 Flash / OpenAI / Grounded Fallback]
+    R -->|Top 5 Context Chunks| S[🧠 LLM Synthesis Engine\nGoogle Gemini 2.5 Flash / Grounded Fallback]
     S --> T[📊 Interactive Results Dashboard\nAttribution & Confidence Scores]
 ```
 
@@ -50,14 +50,12 @@ flowchart TD
 * **Graph Relational Expansion**: Connects semantically related chunks using **NetworkX** graph edges (similarity threshold $>0.75$).
 
 ### 3. 🤖 Dynamic AI Question Generator
-* Generates 3 document-tailored evaluation questions based on the extracted document content.
-* Supports **Google Gemini 2.5 Flash** (Primary) and **OpenAI `gpt-4o-mini`** (Fallback).
-* Includes a **Zero-API NLP Heuristic Generator** so question suggestion works even when LLM quotas are offline.
+* Generates 3 document-tailored evaluation questions based on extracted document content using **Google Gemini 2.5 Flash**.
+* Includes a **Zero-API NLP Heuristic Generator** so question suggestion works even during temporary network delays or rate limits.
 
-### 4. 🛡️ 3-Tier Resilient Fallback Architecture
-* **Tier 1**: Google Gemini 2.5 Flash LLM synthesis.
-* **Tier 2**: OpenAI `gpt-4o-mini` completion fallback.
-* **Tier 3**: Direct grounded chunk attribution — displays retrieved document excerpts directly if API keys are offline or rate-limited.
+### 4. 🛡️ Resilient Synthesis Architecture
+* **Primary LLM**: Google Gemini 2.5 Flash high-speed LLM synthesis.
+* **Grounded Excerpt Engine**: Direct grounded chunk attribution — displays retrieved document excerpts directly if API quotas or network delays occur.
 
 ### 5. 💻 Modern Enterprise Dashboard
 * Fully responsive interface built with **React**, **Tailwind CSS**, and **Lucide Icons**.
@@ -76,7 +74,7 @@ flowchart TD
 | **Embeddings** | BAAI/bge-small-en-v1.5 | 384-dimensional dense vector embeddings |
 | **Reranker** | CrossEncoder MiniLM | Precision reranking model |
 | **Vector Store** | FAISS | In-memory inner-product vector index |
-| **LLM Engines** | Gemini 2.5 Flash / OpenAI | Primary LLM answer synthesis |
+| **LLM Engine** | Google Gemini 2.5 Flash | Exclusive LLM answer synthesis engine |
 | **Containerization** | Docker | Multi-stage build (Node 18 + Python 3.10 slim) |
 
 ---
@@ -88,9 +86,6 @@ Create a `.env` file in the root directory:
 ```env
 # Google Gemini API Key (From https://aistudio.google.com/)
 GEMINI_API_KEY="your-google-gemini-api-key-here"
-
-# OpenAI API Key (Optional Fallback)
-OPENAI_API_KEY="sk-proj-your-openai-api-key-here"
 
 # Security Bearer Token for Protected Endpoints
 SECURITY_TOKEN="128c33fc16f4a70cab19dab48958d5bf246e7003a8bfd7eb0be2f617b48e662a"

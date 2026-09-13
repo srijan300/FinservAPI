@@ -18,7 +18,6 @@ from sklearn.preprocessing import normalize
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from PyPDF2 import PdfReader
-from openai import OpenAI
 from pydantic import BaseModel
 from typing import List
 import logging
@@ -41,12 +40,12 @@ nltk.data.path.append('/tmp/nltk_data')
 nltk.download("punkt_tab", quiet=True)
 
 class RAGPipeline:
-    def __init__(self, openai_api_key: str = None, gemini_api_key: str = None,
+    def __init__(self, gemini_api_key: str = None,
                  embed_model_name: str = "BAAI/bge-small-en-v1.5",
                  rerank_model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
         """
         Initializes the RAG pipeline, loading models and setting up configurations.
-        Supports both OpenAI and Google Gemini APIs.
+        Uses Google Gemini API exclusively.
         """
         logger.info("Initializing RAG Pipeline with Caching and Reranker...")
         
@@ -59,19 +58,14 @@ class RAGPipeline:
 
         # --- Model and API Setup ---
         self.gemini_model = None
-        self.openai_client = None
 
         if gemini_api_key:
             genai.configure(api_key=gemini_api_key)
             self.gemini_model = genai.GenerativeModel("gemini-2.5-flash")
             logger.info("Configured Google Gemini API (gemini-2.5-flash).")
-        
-        if openai_api_key:
-            self.openai_client = OpenAI(api_key=openai_api_key)
-            logger.info("Configured OpenAI API.")
 
-        if not self.gemini_model and not self.openai_client:
-            raise ValueError("Either GEMINI_API_KEY or OPENAI_API_KEY is required.")
+        if not self.gemini_model:
+            raise ValueError("GEMINI_API_KEY is required to initialize RAG Pipeline.")
         
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         logger.info(f"Loading models onto device: {device}...")
@@ -338,7 +332,7 @@ Format requirements:
 - Do NOT include numbers, bullet points, asterisks, or extra intro text.
 - Each question must be a complete sentence ending with a question mark."""
 
-            logger.info("Generating dynamic AI questions using LLM based on extracted document content...")
+            logger.info("Generating dynamic AI questions using Google Gemini LLM based on extracted document content...")
             if self.gemini_model:
                 try:
                     response = self.gemini_model.generate_content(prompt)
@@ -348,22 +342,7 @@ Format requirements:
                     elif len(lines) > 0:
                         return lines
                 except Exception as gemini_err:
-                    logger.warning(f"Gemini API failed: {gemini_err}. Trying OpenAI fallback...")
-
-            if self.openai_client:
-                try:
-                    response = self.openai_client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.3,
-                    )
-                    lines = [line.strip().lstrip('123456789.-* ') for line in response.choices[0].message.content.strip().split('\n') if line.strip() and '?' in line]
-                    if len(lines) >= 3:
-                        return lines[:3]
-                    elif len(lines) > 0:
-                        return lines
-                except Exception as openai_err:
-                    logger.warning(f"OpenAI API failed: {openai_err}. Using heuristic fallback...")
+                    logger.warning(f"Google Gemini API call failed: {gemini_err}. Using heuristic fallback...")
 
             logger.info("Using smart document heuristic question generator...")
             return self._generate_heuristic_questions(sample_text)
@@ -408,22 +387,11 @@ Answer:"""
                     response = self.gemini_model.generate_content(prompt)
                     return response.text.strip()
                 except Exception as gemini_err:
-                    logger.warning(f"Gemini API failed: {gemini_err}. Trying OpenAI fallback...")
-
-            if self.openai_client:
-                try:
-                    response = self.openai_client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.0,
-                    )
-                    return response.choices[0].message.content.strip()
-                except Exception as openai_err:
-                    logger.warning(f"OpenAI API failed: {openai_err}.")
+                    logger.warning(f"Google Gemini API call failed: {gemini_err}.")
 
             # Fallback to direct chunk retrieval answer if LLM APIs fail
             formatted_chunks = "\n\n".join([f"> **Excerpt {i+1}**: {chunk[:300]}..." for i, chunk in enumerate(top_chunks[:2])])
-            return f"**[Document Grounded Excerpt]** *(LLM API offline/quota limit)*:\n\n{formatted_chunks}"
+            return f"**[Document Grounded Excerpt]** *(Google Gemini API quota limit/delay)*:\n\n{formatted_chunks}"
         except Exception as e:
             logger.error(f"Error during LLM API call: {e}")
             formatted_chunks = "\n\n".join([f"> {c[:250]}..." for c in top_chunks[:2]])
