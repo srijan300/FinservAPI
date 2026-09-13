@@ -1,13 +1,3 @@
----
-title: FinServe Intelligent Document QA Platform
-emoji: 🛡️
-colorFrom: indigo
-colorTo: blue
-sdk: docker
-app_port: 8000
-pinned: false
----
-
 # 🛡️ FinServe: Intelligent Document QA Platform
 > **Enterprise-Grade Retrieval-Augmented Generation (RAG) Platform for Fintech, Insurance, and Complex Audit Documents**
 
