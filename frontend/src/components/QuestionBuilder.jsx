@@ -100,7 +100,7 @@ export default function QuestionBuilder({
               type="text"
               value={q}
               onChange={(e) => handleQuestionChange(idx, e.target.value)}
-              placeholder="Type your question here (e.g. What are the key findings or coverage limits in this document?)"
+              placeholder="Type your question here (e.g. What are the key topics, requirements, or instructions in this document?)"
               className="flex-1 bg-white dark:bg-[#090A0F] border border-slate-300 dark:border-[#232736] rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-600 dark:focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
             />
             {questions.length > 1 && (

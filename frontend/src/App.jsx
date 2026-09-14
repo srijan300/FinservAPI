@@ -52,16 +52,17 @@ export default function App() {
     }
   }, [theme]);
 
-  // Handler to auto-generate LIVE AI questions by sending document text to Gemini LLM
-  const handleSuggestQuestions = async () => {
+  // Handler to auto-generate LIVE AI questions by sending document text to Groq LLM
+  const handleSuggestQuestions = async (overrideDocUrl) => {
     setErrorDetails(null);
-    let targetDocUrl = documentUrl ? documentUrl.trim() : '';
+    let targetDocUrl = (overrideDocUrl || documentUrl || '').trim();
 
-    if (inputTab === 'upload' && selectedFile?.rawFile) {
+    if (!overrideDocUrl && inputTab === 'upload' && selectedFile?.rawFile) {
       try {
         setIsSuggesting(true);
         const uploadRes = await uploadDocumentFileAPI(selectedFile.rawFile);
         targetDocUrl = uploadRes.file_path || uploadRes.url;
+        setDocumentUrl(targetDocUrl);
       } catch (err) {
         setIsSuggesting(false);
         setErrorDetails(`⚠️ Failed to upload file for AI analysis: ${err.message}`);
@@ -83,9 +84,19 @@ export default function App() {
         setErrorDetails("⚠️ LLM did not return questions for this document. Please try typing a custom question.");
       }
     } catch (err) {
-      setErrorDetails(err.message || "⚠️ LLM API request limit reached. Please wait a moment before trying again.");
+      setErrorDetails(err.message || "⚠️ Failed to generate AI questions for this document.");
     } finally {
       setIsSuggesting(false);
+    }
+  };
+
+  const handleDocumentUploaded = (newDocUrl) => {
+    // Clear previous questions from any prior document immediately
+    setQuestions(['']);
+    setResults(null);
+    setErrorDetails(null);
+    if (newDocUrl) {
+      handleSuggestQuestions(newDocUrl);
     }
   };
 
@@ -201,6 +212,7 @@ export default function App() {
               setDocumentUrl={setDocumentUrl}
               selectedFile={selectedFile}
               setSelectedFile={setSelectedFile}
+              onDocumentUploaded={handleDocumentUploaded}
             />
 
             <QuestionBuilder

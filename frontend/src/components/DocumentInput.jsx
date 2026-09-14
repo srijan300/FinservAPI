@@ -8,7 +8,8 @@ export default function DocumentInput({
   documentUrl,
   setDocumentUrl,
   selectedFile,
-  setSelectedFile
+  setSelectedFile,
+  onDocumentUploaded
 }) {
   const [isUploading, setIsUploading] = React.useState(false);
 
@@ -28,10 +29,17 @@ export default function DocumentInput({
       setIsUploading(true);
       try {
         const uploadRes = await uploadDocumentFileAPI(file);
-        setDocumentUrl(uploadRes.file_path || uploadRes.filename || file.name);
+        const uploadedTarget = uploadRes.file_path || uploadRes.url || file.name;
+        setDocumentUrl(uploadedTarget);
+        if (onDocumentUploaded) {
+          onDocumentUploaded(uploadedTarget);
+        }
       } catch (err) {
         console.error("Upload error:", err);
         setDocumentUrl(file.name);
+        if (onDocumentUploaded) {
+          onDocumentUploaded(file.name);
+        }
       } finally {
         setIsUploading(false);
       }
@@ -144,7 +152,7 @@ export default function DocumentInput({
                   <div className="col-span-3 text-right text-slate-500 dark:text-slate-400 text-[11px]">{selectedFile.size}</div>
                   <div className="col-span-2 text-right">
                     <button
-                      onClick={() => { setSelectedFile(null); setDocumentUrl(''); }}
+                      onClick={() => { setSelectedFile(null); setDocumentUrl(''); if (onDocumentUploaded) onDocumentUploaded(''); }}
                       className="p-1 hover:bg-red-500/10 rounded text-slate-400 hover:text-red-500 transition-colors"
                       title="Remove File"
                     >

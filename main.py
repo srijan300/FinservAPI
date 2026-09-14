@@ -103,11 +103,10 @@ async def suggest_questions(request_data: SuggestionRequest):
     except Exception as e:
         err_msg = str(e)
         print(f"Error generating AI questions: {err_msg}")
-        return SuggestionResponse(questions=[
-            "What are the specific coverage limits, deductibles, and exclusions specified under this policy?",
-            "What are the waiting periods and mandatory conditions for claim eligibility?",
-            "What are the terms regarding premium payments, policy renewal, and cancellation?"
-        ])
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unable to generate AI questions: {err_msg}"
+        )
 
 @api_router.post(
     "/hackrx/run",

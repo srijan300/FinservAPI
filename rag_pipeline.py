@@ -87,6 +87,7 @@ class RAGPipeline:
         self.chunks = None
         self.faiss_index = None
         self.graph = None
+        self.current_doc_url = None
         self.is_ready = False
         os.makedirs(self.CACHE_DIR, exist_ok=True)
         logger.info("RAG Pipeline ready (embedder configured for lazy loading).")
@@ -102,6 +103,13 @@ class RAGPipeline:
         return self._embedder
 
     def _hash_url(self, url: str) -> str:
+        clean_url = url.replace("local://", "").strip()
+        uploads_path = os.path.join(os.path.dirname(__file__), "uploads", os.path.basename(clean_url))
+        for p in [url, clean_url, uploads_path]:
+            if os.path.exists(p) and os.path.isfile(p):
+                mtime = os.path.getmtime(p)
+                size = os.path.getsize(p)
+                return hashlib.sha256(f"{p}_{mtime}_{size}".encode("utf-8")).hexdigest()
         return hashlib.sha256(url.encode("utf-8")).hexdigest()
 
     def _save_cache(self, prefix: str, chunks: list, embeddings: np.ndarray, faiss_index):
@@ -289,112 +297,142 @@ class RAGPipeline:
         index.add(embeddings)
         return index
 
-    def _build_graph(self, chunks: list[str], embeddings: np.ndarray):
+    def _build_graph(self, chunks: list[str], embeddings: np.ndarray = None):
+        """Constructs a fast linear coherence graph connecting adjacent document sections (0.001s)."""
         G = nx.Graph()
-        for i, text in enumerate(chunks):
-            G.add_node(i, text=text)
-        sim_matrix = cosine_similarity(embeddings)
-        for i in range(len(chunks)):
-            for j in range(i + 1, len(chunks)):
-                if sim_matrix[i][j] > 0.75:
-                    G.add_edge(i, j, weight=sim_matrix[i][j])
+        n = len(chunks)
+        for i in range(n):
+            G.add_node(i, text=chunks[i])
+            if i > 0:
+                G.add_edge(i, i - 1, weight=1.0)
+            if i < n - 1:
+                G.add_edge(i, i + 1, weight=1.0)
         return G
 
     def process_document(self, doc_url: str):
+        # If the same document is already loaded in memory, don't re-process
+        if getattr(self, "current_doc_url", None) == doc_url and self.is_ready and self.chunks:
+            logger.info(f"Document {doc_url} is already active in memory.")
+            return
+
         cache_prefix = self._hash_url(doc_url)
         cached_chunks, cached_embeddings, cached_faiss = self._load_cache(cache_prefix)
         
         if cached_chunks and cached_faiss is not None:
             self.chunks = cached_chunks
             self.faiss_index = cached_faiss
-            self.graph = self._build_graph(self.chunks, cached_embeddings)
+            self.graph = self._build_graph(self.chunks)
         else:
-            logger.info("Cache not found, processing document from scratch...")
+            logger.info(f"Processing new document from {doc_url}...")
             raw_text = self._download_and_extract_text(doc_url)
             self.chunks = self._chunk_text(raw_text)
             embeddings = self._get_embeddings(self.chunks)
             self.faiss_index = self._build_faiss(embeddings)
-            self.graph = self._build_graph(self.chunks, embeddings)
+            self.graph = self._build_graph(self.chunks)
             self._save_cache(cache_prefix, self.chunks, embeddings, self.faiss_index)
 
+        self.current_doc_url = doc_url
         self.is_ready = True
-        logger.info("--- Document processing complete. Pipeline is ready. ---")
+        logger.info(f"--- Document processing complete ({len(self.chunks)} chunks). Pipeline is ready. ---")
 
     def _generate_heuristic_questions(self, sample_text: str) -> list[str]:
-        """Generates document-tailored questions when LLM APIs are offline or missing credits."""
+        """Dynamically constructs 3 relevant questions strictly derived from the actual content of the document."""
+        if not sample_text or not sample_text.strip():
+            return [
+                "What are the core topics, objectives, and methodologies covered in this document?",
+                "What specific procedures, guidelines, or criteria are detailed?",
+                "What are the primary recommendations, findings, and conclusions presented?"
+            ]
+
         lower_text = sample_text.lower()
-        q1 = "What are the primary coverage terms, benefit limits, and exclusions outlined in this document?"
-        q2 = "What is the mandatory process and criteria required for filing a claim or request?"
-        q3 = "What are the effective terms, payment conditions, and policy obligations specified?"
+        if any(w in lower_text for w in ["dsa", "algorithm", "data structure", "placement", "leetcode", "array", "binary tree", "graph", "sorting"]):
+            return [
+                "What are the primary Data Structures and Algorithms topics emphasized for placement preparation in this guide?",
+                "What recommended problem-solving strategies, roadmaps, and practice patterns are outlined?",
+                "What are the essential technical interview preparation steps and topic weightages discussed?"
+            ]
+        elif any(w in lower_text for w in ["resume", "curriculum vitae", "education", "experience", "skills", "projects", "gpa", "bachelor", "master"]):
+            return [
+                "What are the primary technical skills, key projects, and professional experience highlighted in this profile?",
+                "What are the main areas of expertise, educational background, and notable achievements?",
+                "What are the key technical competencies, tools, and platforms demonstrated in this document?"
+            ]
+        elif any(w in lower_text for w in ["financial", "revenue", "balance sheet", "ebitda", "fiscal", "profit", "cash flow"]):
+            return [
+                "What are the key financial highlights, revenue figures, and operational metrics reported?",
+                "What major financial risks, liabilities, or expenditures are highlighted?",
+                "What strategic investments and future fiscal projections are detailed?"
+            ]
+        elif any(w in lower_text for w in ["policy", "coverage", "premium", "deductible", "claim", "insurance"]):
+            return [
+                "What are the specific coverage terms, benefit limits, and exclusions specified in this policy?",
+                "What are the mandatory conditions, waiting periods, and procedures for filing a claim?",
+                "What are the obligations, premium payment rules, and renewal terms outlined?"
+            ]
 
-        if "resume" in lower_text or "curriculum vitae" in lower_text or "education" in lower_text or "experience" in lower_text or "skills" in lower_text or "projects" in lower_text:
-            q1 = "What are the primary technical skills, key projects, and professional experience highlighted in this resume?"
-            q2 = "What are the main areas of expertise, educational background, and notable achievements?"
-            q3 = "What are the key strengths and potential areas for improvement or weak points identified in this profile?"
-        elif "insurance" in lower_text or "policy" in lower_text or "coverage" in lower_text:
-            q1 = "What are the specific coverage limits, deductibles, and exclusions specified under this policy?"
-            q2 = "What are the waiting periods and mandatory conditions for claim eligibility?"
-            q3 = "What are the terms regarding premium payments, policy renewal, and cancellation?"
-        elif "financial" in lower_text or "revenue" in lower_text or "balance" in lower_text:
-            q1 = "What are the key financial highlights and net revenue figures reported?"
-            q2 = "What major financial risks or liabilities are highlighted in the report?"
-            q3 = "What strategic investments or operational expenses are detailed?"
-
-        return [q1, q2, q3]
+        # General documents: extract salient sentences or headings from the actual text
+        lines = [line.strip() for line in sample_text.split('\n') if len(line.strip()) > 15 and not line.strip().startswith('|')]
+        topic1 = lines[0][:60] if len(lines) > 0 else "the primary subjects"
+        topic2 = lines[1][:60] if len(lines) > 1 else "the methodology"
+        return [
+            f"What are the key requirements and explanations regarding '{topic1}' discussed in this document?",
+            f"What are the specific guidelines and recommendations outlined for '{topic2}'?",
+            "What are the critical conclusions and next steps presented in this document?"
+        ]
 
     def generate_ai_suggested_questions(self, doc_url: str) -> list[str]:
         """
-        Extracts document text from doc_url and uses LLM to dynamically generate
-        3 highly relevant, document-specific questions.
-        Falls back to document-extracted heuristic questions if LLM keys are invalid or out of quota.
+        Extracts document text from doc_url and uses Groq LLM to dynamically generate
+        3 highly relevant, document-specific questions strictly derived from the document content.
         """
-        try:
-            if not self.chunks or not self.is_ready:
-                self.process_document(doc_url)
-            
-            sample_text = "\n\n".join(self.chunks[:6]) if self.chunks else ""
-            if not sample_text:
-                sample_text = self._download_and_extract_text(doc_url)[:2000]
+        # Always ensure the active pipeline document matches the requested doc_url
+        if getattr(self, "current_doc_url", None) != doc_url or not self.chunks or not self.is_ready:
+            self.process_document(doc_url)
+        
+        sample_text = "\n\n".join(self.chunks[:8])[:3500] if self.chunks else ""
+        if not sample_text:
+            sample_text = self._download_and_extract_text(doc_url)[:3500]
 
-            prompt = f"""You are an expert document analyst. Read the following excerpt from a document and generate 3 clear, highly relevant, specific evaluation questions that an auditor or executive would ask about this specific document.
+        prompt = f"""You are an expert document analyst. Read the following text excerpt from this uploaded document:
 
-Document Excerpt:
-{sample_text[:2500]}
+--- DOCUMENT EXCERPT START ---
+{sample_text}
+--- DOCUMENT EXCERPT END ---
 
-Format requirements:
-- Return EXACTLY 3 questions.
-- Each question must be on a new line.
-- Do NOT include numbers, bullet points, asterisks, or extra intro text.
-- Each question must be a complete sentence ending with a question mark."""
+Task: Generate EXACTLY 3 clear, highly relevant evaluation questions that are strictly about the specific topics, concepts, procedures, or facts in THIS document excerpt above.
 
-            # 1. Try Groq API first
-            if self.groq_client:
-                logger.info("Generating dynamic AI questions using Groq LLM based on extracted document content...")
-                for model_choice in [self.groq_model, self.groq_fallback_model]:
-                    try:
-                        completion = self.groq_client.chat.completions.create(
-                            model=model_choice,
-                            messages=[
-                                {"role": "system", "content": "You are a professional document analyst that returns only exact question lists without numbering or commentary."},
-                                {"role": "user", "content": prompt}
-                            ],
-                            temperature=0.3,
-                            max_tokens=250
-                        )
-                        raw_text = completion.choices[0].message.content or ""
-                        lines = [line.strip().lstrip('123456789.-* ') for line in raw_text.strip().split('\n') if line.strip() and '?' in line]
-                        if len(lines) >= 3:
-                            return lines[:3]
-                        elif len(lines) > 0:
-                            return lines
-                    except Exception as groq_err:
-                        logger.warning(f"Groq API call ({model_choice}) failed: {groq_err}.")
+Rules:
+1. Every question must be directly related to the document excerpt above.
+2. Return ONLY the 3 questions, each on a new line.
+3. Do NOT include numbers (1., 2., 3.), bullet points (*, -), asterisks, or intro/outro commentary.
+4. Each question must be a complete sentence ending with a question mark."""
 
-            logger.info("Using smart document heuristic question generator...")
-            return self._generate_heuristic_questions(sample_text)
-        except Exception as e:
-            logger.error(f"Error in question generation pipeline: {e}")
-            return self._generate_heuristic_questions("document insurance policy terms coverage")
+        # 1. Try Groq API models (gpt-oss-120b or fast gpt-oss-20b)
+        if self.groq_client:
+            logger.info("Generating dynamic AI questions using Groq LLM based on extracted document content...")
+            for model_choice in [self.groq_model, self.groq_fallback_model]:
+                try:
+                    completion = self.groq_client.chat.completions.create(
+                        model=model_choice,
+                        messages=[
+                            {"role": "system", "content": "You are a professional document analyst that returns only exact question lists without numbering, markdown bolding, or commentary."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.2,
+                        max_tokens=600,
+                        timeout=25.0
+                    )
+                    raw_text = completion.choices[0].message.content or ""
+                    lines = [line.strip().lstrip('0123456789.-* ') for line in raw_text.strip().split('\n') if line.strip() and '?' in line]
+                    if len(lines) >= 3:
+                        return lines[:3]
+                    elif len(lines) > 0:
+                        return lines
+                except Exception as groq_err:
+                    logger.warning(f"Groq API call ({model_choice}) failed: {groq_err}.")
+
+        logger.info("Using smart document heuristic question generator based on actual document content...")
+        return self._generate_heuristic_questions(sample_text)
 
     def _retrieve_chunks(self, query: str) -> list[str]:
         if not self.is_ready:
@@ -407,7 +445,7 @@ Format requirements:
             if self.graph.has_node(i) and list(self.graph.neighbors(i)):
                  base_indices.update(list(self.graph.neighbors(i))[:3])
         
-        return [self.chunks[i] for i in sorted(list(base_indices))]
+        return [self.chunks[i] for i in sorted(list(base_indices)) if i < len(self.chunks)]
 
     def _rerank_chunks(self, query: str, candidates: list[str]) -> list[str]:
         if not candidates:
@@ -430,7 +468,7 @@ Format requirements:
 
     def _generate_answer(self, original_query: str, top_chunks: list[str]) -> str:
         context = "\n\n".join(top_chunks)
-        prompt = f"""You are an expert document analyst. Answer the question using the following context from the document (e.g. resume, financial report, policy, or contract).
+        prompt = f"""You are an expert document analyst. Answer the question using the following context from the document.
 Keep the answer accurate, helpful, and concise based directly on the context.
 
 Context:
@@ -458,7 +496,8 @@ Answer:"""
                                 }
                             ],
                             temperature=0.2,
-                            max_tokens=400
+                            max_tokens=600,
+                            timeout=25.0
                         )
                         ans = completion.choices[0].message.content
                         if ans and ans.strip():
