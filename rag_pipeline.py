@@ -82,6 +82,13 @@ class RAGPipeline:
         self.embed_model_name = embed_model_name
         self._embedder = None
         self.reranker = None
+
+        # --- State variables ---
+        self.chunks = None
+        self.faiss_index = None
+        self.graph = None
+        self.is_ready = False
+        os.makedirs(self.CACHE_DIR, exist_ok=True)
         logger.info("RAG Pipeline ready (embedder configured for lazy loading).")
 
     @property
@@ -94,41 +101,41 @@ class RAGPipeline:
             logger.info("Embedding model loaded successfully.")
         return self._embedder
 
-        # --- State variables ---
-        self.chunks = None
-        self.faiss_index = None
-        self.graph = None
-        self.is_ready = False
-        os.makedirs(self.CACHE_DIR, exist_ok=True)
-        logger.info("RAG Pipeline initialized.")
-
     def _hash_url(self, url: str) -> str:
         return hashlib.sha256(url.encode("utf-8")).hexdigest()
 
     def _save_cache(self, prefix: str, chunks: list, embeddings: np.ndarray, faiss_index):
         logger.info(f"Saving cache for prefix: {prefix}")
-        np.save(os.path.join(self.CACHE_DIR, f"{prefix}_embeddings.npy"), embeddings)
-        faiss.write_index(faiss_index, os.path.join(self.CACHE_DIR, f"{prefix}_faiss.index"))
-        with open(os.path.join(self.CACHE_DIR, f"{prefix}_chunks.txt"), "w", encoding="utf-8") as f:
-            f.write("\n".join(chunks))
+        try:
+            os.makedirs(self.CACHE_DIR, exist_ok=True)
+            np.save(os.path.join(self.CACHE_DIR, f"{prefix}_embeddings.npy"), embeddings)
+            faiss.write_index(faiss_index, os.path.join(self.CACHE_DIR, f"{prefix}_faiss.index"))
+            with open(os.path.join(self.CACHE_DIR, f"{prefix}_chunks.txt"), "w", encoding="utf-8") as f:
+                f.write("\n".join(chunks))
+        except Exception as e:
+            logger.warning(f"Failed to save cache: {e}")
 
     def _load_cache(self, prefix: str):
-        logger.info(f"Attempting to load cache for prefix: {prefix}")
-        embedding_path = os.path.join(self.CACHE_DIR, f"{prefix}_embeddings.npy")
-        faiss_path = os.path.join(self.CACHE_DIR, f"{prefix}_faiss.index")
-        chunks_path = os.path.join(self.CACHE_DIR, f"{prefix}_chunks.txt")
+        try:
+            logger.info(f"Attempting to load cache for prefix: {prefix}")
+            embedding_path = os.path.join(self.CACHE_DIR, f"{prefix}_embeddings.npy")
+            faiss_path = os.path.join(self.CACHE_DIR, f"{prefix}_faiss.index")
+            chunks_path = os.path.join(self.CACHE_DIR, f"{prefix}_chunks.txt")
 
-        if not (os.path.exists(embedding_path) and os.path.exists(faiss_path) and os.path.exists(chunks_path)):
-            logger.info("Cache not found.")
+            if not (os.path.exists(embedding_path) and os.path.exists(faiss_path) and os.path.exists(chunks_path)):
+                logger.info("Cache not found.")
+                return None, None, None
+            
+            embeddings = np.load(embedding_path)
+            faiss_index = faiss.read_index(faiss_path)
+            with open(chunks_path, "r", encoding="utf-8") as f:
+                chunks = f.read().splitlines()
+            
+            logger.info("Cache loaded successfully.")
+            return chunks, embeddings, faiss_index
+        except Exception as e:
+            logger.warning(f"Cache load skipped due to: {e}")
             return None, None, None
-        
-        embeddings = np.load(embedding_path)
-        faiss_index = faiss.read_index(faiss_path)
-        with open(chunks_path, "r", encoding="utf-8") as f:
-            chunks = f.read().splitlines()
-        
-        logger.info("Cache loaded successfully.")
-        return chunks, embeddings, faiss_index
 
     def _table_to_markdown(self, table_data):
         if not table_data:
@@ -163,17 +170,17 @@ class RAGPipeline:
         if os.path.exists(target_url):
             local_path = target_url
             ext = os.path.splitext(target_url)[1].lstrip('.').lower()
-            if ext in ['pdf', 'docx', 'eml']:
+            if ext in ['pdf', 'docx', 'eml', 'txt', 'md']:
                 file_extension = ext
         elif os.path.exists(clean_url):
             local_path = clean_url
             ext = os.path.splitext(clean_url)[1].lstrip('.').lower()
-            if ext in ['pdf', 'docx', 'eml']:
+            if ext in ['pdf', 'docx', 'eml', 'txt', 'md']:
                 file_extension = ext
         elif os.path.exists(uploads_path):
             local_path = uploads_path
             ext = os.path.splitext(uploads_path)[1].lstrip('.').lower()
-            if ext in ['pdf', 'docx', 'eml']:
+            if ext in ['pdf', 'docx', 'eml', 'txt', 'md']:
                 file_extension = ext
         elif target_url.startswith("http://") or target_url.startswith("https://"):
             # Handle Google Drive share links: convert /file/d/FILE_ID/view to direct download link
@@ -246,8 +253,11 @@ class RAGPipeline:
             if parsed_eml.get('body'):
                 full_text = parsed_eml['body'][0]['content']
 
+        elif file_extension in ['txt', 'md']:
+            with open(local_path, "r", encoding="utf-8", errors="ignore") as f:
+                full_text = f.read()
         else:
-            raise ValueError(f"Unsupported file type: {file_extension}. Supported formats are PDF, DOCX, and EML.")
+            raise ValueError(f"Unsupported file type: {file_extension}. Supported formats are PDF, DOCX, EML, TXT, and MD.")
 
         if not full_text.strip():
             raise ValueError("No text could be extracted from the document. Please ensure the file contains readable text or tables.")
@@ -317,7 +327,11 @@ class RAGPipeline:
         q2 = "What is the mandatory process and criteria required for filing a claim or request?"
         q3 = "What are the effective terms, payment conditions, and policy obligations specified?"
 
-        if "insurance" in lower_text or "policy" in lower_text or "coverage" in lower_text:
+        if "resume" in lower_text or "curriculum vitae" in lower_text or "education" in lower_text or "experience" in lower_text or "skills" in lower_text or "projects" in lower_text:
+            q1 = "What are the primary technical skills, key projects, and professional experience highlighted in this resume?"
+            q2 = "What are the main areas of expertise, educational background, and notable achievements?"
+            q3 = "What are the key strengths and potential areas for improvement or weak points identified in this profile?"
+        elif "insurance" in lower_text or "policy" in lower_text or "coverage" in lower_text:
             q1 = "What are the specific coverage limits, deductibles, and exclusions specified under this policy?"
             q2 = "What are the waiting periods and mandatory conditions for claim eligibility?"
             q3 = "What are the terms regarding premium payments, policy renewal, and cancellation?"
@@ -416,8 +430,8 @@ Format requirements:
 
     def _generate_answer(self, original_query: str, top_chunks: list[str]) -> str:
         context = "\n\n".join(top_chunks)
-        prompt = f"""You are answering a question using the following context from an insurance policy. 
-Don't use knowledge which is not in the context. Keep the answer brief.
+        prompt = f"""You are an expert document analyst. Answer the question using the following context from the document (e.g. resume, financial report, policy, or contract).
+Keep the answer accurate, helpful, and concise based directly on the context.
 
 Context:
 {context}
@@ -436,7 +450,7 @@ Answer:"""
                             messages=[
                                 {
                                     "role": "system",
-                                    "content": "You are an accurate, concise question-answering assistant for policy audits. Answer questions directly using only the provided context. Keep answers clear and succinct."
+                                    "content": "You are an intelligent, accurate document analyst and auditor. Answer questions directly using only the provided context. Keep answers clear, factual, and succinct."
                                 },
                                 {
                                     "role": "user",

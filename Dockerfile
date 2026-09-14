@@ -40,6 +40,9 @@ RUN python -c "from sentence_transformers import SentenceTransformer; import nlt
 # Copy backend application source code
 COPY . .
 
+# Ensure cache and uploads directories exist with full permissions
+RUN mkdir -p cache uploads
+
 # Copy compiled frontend dist from Stage 1
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
